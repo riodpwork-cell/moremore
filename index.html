@@ -592,6 +592,12 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
 /* struk: total pakai spidol hijau */
 .leader.total b { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { #view.enter h1::after { animation: none; } }
+
+/* isi kemasan: angka + satuan dalam satu baris; tanggal iOS jangan melebar keluar kolom */
+.packrow { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; }
+input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; text-align: left; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.grid2 > .field { min-width: 0; }
 </style>
 </head>
 <body>
@@ -742,6 +748,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
     var v = qty * u.f;
     var bf = BASE_FAM[ing.base];
     if (u.fam === bf) return v;
+    if (unit === 'pcs' && ing.packSize > 0) return qty * ing.packSize;
     var d = ing.density;
     if (!(d > 0)) return null;
     if (ing.base === 'g' && u.fam === 'v') return v * d;
@@ -749,10 +756,19 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
     return null;
   }
   function unitOptions(ing) {
-    var dens = ing.density > 0;
-    if (ing.base === 'g') return dens ? ['g', 'kg', 'ml', 'l'] : ['g', 'kg'];
-    if (ing.base === 'ml') return dens ? ['ml', 'l', 'g', 'kg'] : ['ml', 'l'];
+    var dens = ing.density > 0, pk = ing.packSize > 0 ? ['pcs'] : [];
+    if (ing.base === 'g') return (dens ? ['g', 'kg', 'ml', 'l'] : ['g', 'kg']).concat(pk);
+    if (ing.base === 'ml') return (dens ? ['ml', 'l', 'g', 'kg'] : ['ml', 'l']).concat(pk);
     return ['pcs'];
+  }
+  /* "pcs (isi 950 gr)" untuk bahan yang dibeli per kemasan */
+  function packText(ing) {
+    if (!(ing.packSize > 0) || ing.base === 'pcs') return '';
+    var big = ing.packSize >= 1000 && ing.packSize % 100 === 0;
+    return nf2.format(big ? ing.packSize / 1000 : ing.packSize) + ' ' + (big ? (ing.base === 'g' ? 'kg' : 'liter') : UNITS[ing.base].label);
+  }
+  function unitLabel(ing, u) {
+    return u === 'pcs' && ing && ing.base !== 'pcs' && ing.packSize > 0 ? 'pcs (isi ' + packText(ing) + ')' : UNITS[u].label;
   }
   function purchasesBase(ing) {
     return ing.purchases.map(function (p, i) { return { p: p, i: i, b: toBase(ing, p.qty, p.unit) }; })
@@ -884,7 +900,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
       '<button type="button" class="namebtn" data-act="open-ing" data-id="' + esc(ing.id) + '">' + esc(ing.name) + '</button>' +
       (ing.homemadeId
         ? '<p class="meta"><span class="pill">Homemade</span> ' + esc(homemadeInfo(ing)) + '</p>'
-        : '<p class="meta">' + (lp ? 'Beli terakhir ' + nf2.format(lp.qty) + ' ' + UNITS[lp.unit].label + ' seharga ' + rp(lp.price) + ', ' + esc(fmtDate(lp.date)) : 'Belum ada pembelian yang valid') + '</p>') +
+        : '<p class="meta">' + (lp ? 'Beli terakhir ' + nf2.format(lp.qty) + ' ' + esc(unitLabel(ing, lp.unit)) + ' seharga ' + rp(lp.price) + ', ' + esc(fmtDate(lp.date)) : 'Belum ada pembelian yang valid') + (packText(ing) ? '. Isi ' + esc(packText(ing)) + ' per pcs' : '') + '</p>') +
       '<p class="meta">' + (n ? 'Dipakai di ' + n + ' resep' : 'Belum dipakai di resep mana pun') + '</p></div>' +
       '<div class="price">' + (ppb != null ? '<b>' + rpSmall(ppb) + '</b><span>per ' + baseLabel(ing.base) + (alt ? ', ' + alt : '') + '</span>' : '<b>-</b><span>harga belum bisa dihitung</span>') + '</div></li>';
   }
@@ -1028,13 +1044,14 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
   }
   function unitSelectHTML(ing, sel, id) {
     return '<select id="' + id + '">' + unitOptions(ing).map(function (u) {
-      return '<option value="' + u + '"' + (u === sel ? ' selected' : '') + '>' + UNITS[u].label + '</option>';
+      return '<option value="' + u + '"' + (u === sel ? ' selected' : '') + '>' + unitLabel(ing, u) + '</option>';
     }).join('') + '</select>';
   }
   function previewFor(ing, qty, unit, price) {
     var b = toBase(ing, qty, unit);
     if (b == null || !(price >= 0) || price === null) return 'Isi jumlah dan harga total untuk melihat harga per ' + baseLabel(ing.base) + '.';
-    return 'Setara ' + rpSmall(price / b) + ' per ' + baseLabel(ing.base) + '.';
+    var each = unit === 'pcs' && ing.base !== 'pcs' && ing.packSize > 0 ? nf2.format(qty) + ' pcs = ' + nf2.format(b) + ' ' + baseLabel(ing.base) + ', ' + rpSmall(price / qty) + ' per pcs. ' : '';
+    return each + 'Setara ' + rpSmall(price / b) + ' per ' + baseLabel(ing.base) + '.';
   }
 
   function openNewIng() {
@@ -1046,6 +1063,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
       '<label><input type="radio" name="ni-base" value="ml">Mililiter</label>' +
       '<label><input type="radio" name="ni-base" value="pcs">Pcs</label></fieldset>' +
       '<div class="field" id="ni-dens-wrap"><label for="ni-dens">Berat jenis (gram per ml), opsional</label><input id="ni-dens" type="number" inputmode="decimal" min="0" step="any" aria-describedby="ni-dens-h"><span class="hint" id="ni-dens-h">Isi 1 untuk air supaya resep boleh pakai gram atau ml. Kosongkan kalau tidak perlu.</span></div>' +
+      '<div class="field" id="ni-pack-wrap"><label for="ni-pack">Isi per pcs / kemasan, opsional</label><div class="packrow"><input id="ni-pack" type="number" inputmode="decimal" min="0" step="any" aria-describedby="ni-pack-h"><select id="ni-pack-u" aria-label="Satuan isi kemasan"></select></div><span class="hint" id="ni-pack-h">Misal susu UHT 950 gr per kotak. Dengan ini belanja bisa dicatat per pcs, harga per gram dihitung otomatis.</span></div>' +
       '<hr class="sep"><p class="hint">Pembelian pertama, sesuai struk.</p>' +
       '<div class="grid2"><div class="field"><label for="ni-date">Tanggal beli</label><input id="ni-date" type="date" value="' + todayISO() + '"></div>' +
       '<div class="field"><label for="ni-qty">Jumlah</label><input id="ni-qty" type="number" inputmode="decimal" min="0" step="any"></div>' +
@@ -1057,14 +1075,23 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
   }
   function newIngDraft() {
     var base = ($('input[name="ni-base"]:checked', dlg) || {}).value || 'g';
-    return { base: base, density: numOrNull($('#ni-dens', dlg).value) };
+    var pq = numOrNull($('#ni-pack', dlg).value), pu = $('#ni-pack-u', dlg) ? $('#ni-pack-u', dlg).value : base;
+    var ps = base !== 'pcs' && pq > 0 && UNITS[pu] ? pq * UNITS[pu].f : null;
+    return { base: base, density: numOrNull($('#ni-dens', dlg).value), packSize: ps };
+  }
+  function packUnitOpts(base, sel) {
+    var u = base === 'ml' ? ['ml', 'l'] : ['g', 'kg'];
+    return u.map(function (x) { return '<option value="' + x + '"' + (x === sel ? ' selected' : '') + '>' + UNITS[x].label + '</option>'; }).join('');
   }
   function refreshNewIng(keepUnit) {
     var d = newIngDraft();
     $('#ni-dens-wrap', dlg).hidden = d.base === 'pcs';
+    $('#ni-pack-wrap', dlg).hidden = d.base === 'pcs';
+    var pu = $('#ni-pack-u', dlg), puv = pu.value;
+    if (!pu.options.length || UNITS[puv].fam !== BASE_FAM[d.base]) { pu.innerHTML = packUnitOpts(d.base, d.base === 'ml' ? 'ml' : 'g'); d = newIngDraft(); }
     var cur = $('#ni-unit', dlg) ? $('#ni-unit', dlg).value : null;
     var opts = unitOptions(d);
-    var sel = keepUnit && opts.indexOf(cur) > -1 ? cur : opts[opts.length ? (d.base === 'pcs' ? 0 : (d.base === 'g' ? 1 : 1)) : 0];
+    var sel = keepUnit && opts.indexOf(cur) > -1 ? cur : (d.packSize > 0 ? 'pcs' : opts[opts.length ? (d.base === 'pcs' ? 0 : 1) : 0]);
     $('#ni-unit-wrap', dlg).innerHTML = unitSelectHTML(d, sel, 'ni-unit');
     updateNewIngPreview();
   }
@@ -1082,7 +1109,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
     if (!(qty > 0)) { err.textContent = 'Isi jumlah yang lebih dari 0.'; $('#ni-qty', dlg).focus(); return; }
     if (!(price >= 0) || price === null) { err.textContent = 'Isi harga total, boleh 0 bila gratis.'; $('#ni-price', dlg).focus(); return; }
     if (!date) { err.textContent = 'Pilih tanggal beli.'; $('#ni-date', dlg).focus(); return; }
-    var ing = { id: uid('i'), name: name, base: d.base, density: d.base === 'pcs' ? null : (d.density > 0 ? d.density : null), purchases: [] };
+    var ing = { id: uid('i'), name: name, base: d.base, density: d.base === 'pcs' ? null : (d.density > 0 ? d.density : null), packSize: d.packSize > 0 ? d.packSize : null, purchases: [] };
     if (toBase(ing, qty, unit) == null) { err.textContent = 'Satuan tidak cocok dengan satuan dasar. Isi berat jenis atau ganti satuan.'; return; }
     ing.purchases.push({ id: uid('p'), date: date, qty: qty, unit: unit, price: price });
     state.ingredients.push(ing); save(); closeDlg(); render(); toast('Bahan "' + name + '" disimpan.');
@@ -1098,7 +1125,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
         chg = ', ' + rpSmall(d.ppb) + ' per ' + baseLabel(ing.base);
         if (d.prev) { var pc = (d.ppb - d.prev) / d.prev * 100; chg += ' (' + (pc > 0 ? '+' : pc < 0 ? '' : '') + nf2.format(pc) + '%)'; }
       }
-      return '<li><span>' + esc(fmtDate(p.date)) + ': ' + nf2.format(p.qty) + ' ' + UNITS[p.unit].label + ', ' + rp(p.price) + esc(chg) + '</span>' +
+      return '<li><span>' + esc(fmtDate(p.date)) + ': ' + nf2.format(p.qty) + ' ' + esc(unitLabel(ing, p.unit)) + ', ' + rp(p.price) + esc(chg) + '</span>' +
         '<button type="button" class="btn" data-act="del-purchase" data-ing="' + esc(ing.id) + '" data-id="' + esc(p.id) + '"' + (ing.purchases.length < 2 ? ' disabled' : '') + ' aria-label="Hapus pembelian ' + esc(fmtDate(p.date)) + '">Hapus</button></li>';
     }).join('');
     var used = usedIn(ing.id);
@@ -1106,7 +1133,8 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
       '<form id="f-edit-ing" data-id="' + esc(ing.id) + '" novalidate>' +
       '<div class="field"><label for="ei-name">Nama bahan</label><input id="ei-name" type="text" value="' + esc(ing.name) + '" autocomplete="off"></div>' +
       '<p class="hint">Satuan dasar: ' + baseLabel(ing.base) + '</p>' +
-      (ing.base !== 'pcs' ? '<div class="field"><label for="ei-dens">Berat jenis (gram per ml), opsional</label><input id="ei-dens" type="number" inputmode="decimal" min="0" step="any" value="' + (ing.density > 0 ? esc(ing.density) : '') + '"></div>' : '') +
+      (ing.base !== 'pcs' ? '<div class="field"><label for="ei-dens">Berat jenis (gram per ml), opsional</label><input id="ei-dens" type="number" inputmode="decimal" min="0" step="any" value="' + (ing.density > 0 ? esc(ing.density) : '') + '"></div>' +
+        '<div class="field"><label for="ei-pack">Isi per pcs / kemasan (' + baseLabel(ing.base) + '), opsional</label><input id="ei-pack" type="number" inputmode="decimal" min="0" step="any" value="' + (ing.packSize > 0 ? esc(ing.packSize) : '') + '" aria-describedby="ei-pack-h"><span class="hint" id="ei-pack-h">Misal 950 untuk susu 950 gr per kotak. Belanja lalu bisa dicatat per pcs.</span></div>' : '') +
       '<p class="err" id="ei-err" role="alert"></p>' +
       '<div class="actions"><button type="submit" class="btn primary">Simpan perubahan</button></div></form>' +
       '<hr class="sep"><h3>Riwayat pembelian</h3><ul class="hist">' + hist + '</ul>' +
@@ -1114,7 +1142,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
       '<form id="f-add-purchase" data-id="' + esc(ing.id) + '" novalidate><h3>Tambah pembelian</h3>' +
       '<div class="grid2"><div class="field"><label for="ap-date">Tanggal beli</label><input id="ap-date" type="date" value="' + todayISO() + '"></div>' +
       '<div class="field"><label for="ap-qty">Jumlah</label><input id="ap-qty" type="number" inputmode="decimal" min="0" step="any"></div>' +
-      '<div class="field"><label for="ap-unit">Satuan</label>' + unitSelectHTML(ing, unitOptions(ing)[ing.base === 'pcs' ? 0 : 1] || unitOptions(ing)[0], 'ap-unit') + '</div>' +
+      '<div class="field"><label for="ap-unit">Satuan</label>' + unitSelectHTML(ing, ing.packSize > 0 && ing.base !== 'pcs' ? 'pcs' : unitOptions(ing)[ing.base === 'pcs' ? 0 : 1] || unitOptions(ing)[0], 'ap-unit') + '</div>' +
       '<div class="field"><label for="ap-price">Harga total (Rp)</label><input id="ap-price" type="number" inputmode="numeric" min="0" step="any"></div></div>' +
       '<p class="preview" id="ap-prev" aria-live="polite"></p><p class="err" id="ap-err" role="alert"></p>' +
       '<div class="actions"><button type="submit" class="btn primary">Tambah pembelian</button></div></form>' +
@@ -1294,6 +1322,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
     if (t.id === 'q') { $('#ing-list').innerHTML = ingListHTML(t.value); return; }
     if (t.id === 'ni-qty' || t.id === 'ni-price') { updateNewIngPreview(); return; }
     if (t.id === 'ni-dens') { refreshNewIng(true); return; }
+    if (t.id === 'ni-pack') { refreshNewIng(false); return; }
     if (t.id === 'ap-qty' || t.id === 'ap-price') { var ig = ingById($('#f-add-purchase', dlg).getAttribute('data-id')); if (ig) updatePurchasePreview(ig); return; }
     var m = menuById(state.activeMenu); if (!m) return;
     var f = t.getAttribute('data-f');
@@ -1314,6 +1343,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
     if (t.name === 'pm') { state.settings.priceMode = t.value; save(); $('#ing-list').innerHTML = ingListHTML($('#q').value); toast('Harga di COGS memakai ' + (t.value === 'avg' ? 'rata-rata tertimbang.' : 'pembelian terakhir.')); return; }
     if (t.name === 'ni-base') { refreshNewIng(false); return; }
     if (t.id === 'ni-unit') { updateNewIngPreview(); return; }
+    if (t.id === 'ni-pack-u') { refreshNewIng(true); return; }
     if (t.id === 'ap-unit') { var ig = ingById($('#f-add-purchase', dlg).getAttribute('data-id')); if (ig) updatePurchasePreview(ig); return; }
     if (t.id === 'menu-sel') { state.activeMenu = t.value; save(); renderMenu(); restoreFocus('#menu-sel'); return; }
     if (t.id === 'm-name') { var mn = menuById(state.activeMenu); if (mn) { var s = $('#menu-sel'); if (s) s.querySelector('option:checked').textContent = mn.name || 'Tanpa nama'; } return; }
@@ -1341,7 +1371,9 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
       var ing = ingById(f.getAttribute('data-id')), nameV = $('#ei-name', dlg).value.trim(), err = $('#ei-err', dlg);
       if (!nameV) { err.textContent = 'Nama bahan tidak boleh kosong.'; $('#ei-name', dlg).focus(); return; }
       var dEl = $('#ei-dens', dlg), dens = dEl ? numOrNull(dEl.value) : null;
-      ing.name = nameV; if (dEl) ing.density = dens > 0 ? dens : null;
+      var pEl = $('#ei-pack', dlg), pack = pEl ? numOrNull(pEl.value) : null;
+      if (pEl && !(pack > 0) && ing.packSize > 0 && ing.purchases.some(function (p) { return p.unit === 'pcs'; })) { err.textContent = 'Ada pembelian yang dicatat per pcs. Isi per kemasan tidak bisa dikosongkan.'; pEl.focus(); return; }
+      ing.name = nameV; if (dEl) ing.density = dens > 0 ? dens : null; if (pEl) ing.packSize = pack > 0 ? pack : null;
       save(); closeDlg(); render(); toast('Perubahan disimpan.');
     }
     else if (f.id === 'f-add-purchase') {
@@ -1377,7 +1409,7 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
     fmtDate: fmtDate, todayISO: todayISO, addDays: addDays, numOrNull: numOrNull, uid: uid, toast: toast,
     openDlg: openDlg, closeDlg: closeDlg, dlgHead: dlgHead, openConfirm: openConfirm,
     calcMenu: calcMenu, menuById: menuById, ingById: ingById, toBase: toBase, $: $, leader: leader,
-    pricePerBase: pricePerBase, unitOptions: unitOptions, calcHomemade: calcHomemade, homemadeById: homemadeById, usedIn: usedIn,
+    pricePerBase: pricePerBase, unitOptions: unitOptions, unitLabel: unitLabel, packText: packText, calcHomemade: calcHomemade, homemadeById: homemadeById, usedIn: usedIn,
     costOutHTML: costOutHTML, baseLabel: baseLabel,
     view: view, dlg: dlg, UNITS: UNITS, ui: {},
     applyRemote: function (patch) {

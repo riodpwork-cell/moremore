@@ -69,28 +69,34 @@
 
   /* ---------- bahan ---------- */
   reg('bahan_buat', false, function (a, errors, dry) {
-    var name = txt(a.name, 60), base = a.base, minStock = numv(a.minStock), density = numv(a.density);
+    var name = txt(a.name, 60), base = a.base, minStock = numv(a.minStock), density = numv(a.density), pack = numv(a.packSize);
+    if (pack != null && !(pack > 0)) errors.push('packSize harus lebih dari 0.');
+    if (pack > 0 && base === 'pcs') errors.push('packSize hanya untuk bahan g atau ml.');
     if (!name) errors.push('Nama bahan kosong.');
     else if (nameTaken(name)) errors.push('Sudah ada bahan bernama ' + name + '.');
     if (!FAM[base]) errors.push('base harus g, ml, atau pcs.');
     if (minStock != null && minStock < 0) errors.push('minStock tidak boleh negatif.');
     if (density != null && !(density > 0)) errors.push('density harus lebih dari 0.');
     if (errors.length || dry) return;
-    S().ingredients.push({ id: uid('i'), name: name, base: base, density: density > 0 ? density : null, purchases: [], minStock: minStock > 0 ? minStock : 0 });
+    S().ingredients.push({ id: uid('i'), name: name, base: base, density: density > 0 ? density : null, purchases: [], minStock: minStock > 0 ? minStock : 0, packSize: pack > 0 ? pack : null });
     return 'Bahan ' + name + ' dibuat di Bank of Goods (satuan dasar ' + UNITS[base].label + '). Harga baru ada setelah belanja dicatat.';
   });
   reg('bahan_ubah', false, function (a, errors, dry) {
     var ing = ingRef(a); if (!ing) { errors.push('Bahan tidak ditemukan.'); return; }
-    var nn = a.newName != null ? txt(a.newName, 60) : null, minStock = a.minStock !== undefined ? numv(a.minStock) : undefined, density = a.density !== undefined ? numv(a.density) : undefined;
+    var nn = a.newName != null ? txt(a.newName, 60) : null, minStock = a.minStock !== undefined ? numv(a.minStock) : undefined, density = a.density !== undefined ? numv(a.density) : undefined, pack = a.packSize !== undefined ? numv(a.packSize) : undefined;
+    if (pack != null && !(pack > 0)) errors.push('packSize harus lebih dari 0, atau null untuk menghapus.');
+    if (pack > 0 && ing.base === 'pcs') errors.push('packSize hanya untuk bahan g atau ml.');
+    if (pack === null && ing.purchases.some(function (p) { return p.unit === 'pcs'; }) && ing.base !== 'pcs') errors.push('Ada pembelian per pcs, packSize tidak bisa dihapus.');
     if (nn != null) { if (!nn) errors.push('newName kosong.'); else if (ing.homemadeId) errors.push('Nama bahan homemade diubah lewat homemade_ubah.'); else if (nameTaken(nn, ing.id)) errors.push('Sudah ada bahan bernama ' + nn + '.'); }
     if (minStock != null && minStock < 0) errors.push('minStock tidak boleh negatif.');
     if (density != null && !(density > 0)) errors.push('density harus lebih dari 0.');
-    if (nn == null && minStock === undefined && density === undefined) errors.push('Tidak ada yang diubah (newName, minStock, density).');
+    if (nn == null && minStock === undefined && density === undefined && pack === undefined) errors.push('Tidak ada yang diubah (newName, minStock, density, packSize).');
     if (errors.length || dry) return;
     var ch = [];
     if (nn != null) { ch.push('nama ' + ing.name + ' menjadi ' + nn); ing.name = nn; }
     if (minStock !== undefined) { ing.minStock = minStock > 0 ? minStock : 0; ch.push('stok minimum ' + (ing.minStock || 'dihapus')); }
     if (density !== undefined) { ing.density = density > 0 ? density : null; ch.push('densitas ' + (ing.density || 'dihapus')); }
+    if (pack !== undefined) { ing.packSize = pack > 0 ? pack : null; ch.push(ing.packSize ? 'isi ' + CC.packText(ing) + ' per pcs' : 'isi kemasan dihapus'); }
     return 'Bahan diubah: ' + ch.join(', ') + '.';
   });
 

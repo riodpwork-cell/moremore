@@ -35,7 +35,7 @@
     }).join('');
     if (!ing) opts = '<option value="" selected>Bahan sudah dihapus</option>' + opts;
     var units = ing ? CC.unitOptions(ing) : [l.unit];
-    var uopts = units.map(function (u) { return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + UNITS[u].label + '</option>'; }).join('');
+    var uopts = units.map(function (u) { return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + esc(CC.unitLabel(ing, u)) + '</option>'; }).join('');
     return '<li class="line">' +
       '<div class="field ing"><label for="hi-' + id + '">Bahan dari Bank of Goods</label><select id="hi-' + id + '" data-hf="ing" data-id="' + id + '">' + opts + '</select></div>' +
       '<div class="field qty"><label for="hq-' + id + '">Jumlah</label><input id="hq-' + id + '" type="number" inputmode="decimal" min="0" step="any" data-hf="qty" data-id="' + id + '" value="' + (l.qty > 0 ? esc(l.qty) : '') + '"></div>' +

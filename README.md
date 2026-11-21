@@ -128,8 +128,8 @@ Semua jenis di bawah memakai aturan antrean yang sama: dicek dulu, ditolak utuh 
 
 | kind | payload | catatan |
 |---|---|---|
-| `bahan_buat` | `{name, base: g\|ml\|pcs, minStock?, density?}` | nama tidak boleh kembar |
-| `bahan_ubah` | `{ingId\|name, newName?, minStock?, density?}` | nama bahan homemade diubah lewat `homemade_ubah` |
+| `bahan_buat` | `{name, base: g\|ml\|pcs, minStock?, density?, packSize?}` | nama tidak boleh kembar. `packSize` = isi satu kemasan dalam satuan dasar (misal 950 untuk susu 950 g), lalu belanja boleh memakai `unit: "pcs"` |
+| `bahan_ubah` | `{ingId\|name, newName?, minStock?, density?, packSize?}` | nama bahan homemade diubah lewat `homemade_ubah` |
 | `homemade_buat` | `{name, base: g\|ml, yieldQty, note?, density?, ratios?, lines: [{ingId\|name, qty, unit, newBase?}]}` | `yieldQty` = hasil jadi per resep dalam satuan dasar. Bahan baru dibuat otomatis bila `newBase` dikirim. Resep boleh memakai homemade lain |
 | `homemade_ubah` | `{hmId\|name, newName?, yieldQty?, note?, density?, ratios?, lines?}` | siklus (resep memakai dirinya sendiri) ditolak |
 | `menu_buat` | `{name, price?, targetMargin?, loss?, shelfDays?, lines: [{section: rtd\|cart, ingId\|name, qty, unit, newBase?}]}` | `targetMargin` dan `loss` dalam persen |

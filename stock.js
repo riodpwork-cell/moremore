@@ -153,7 +153,7 @@
   function tripRowHTML(l, i) {
     var opts = rawIngs().map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === l.ingId ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('');
     var ing = CC.ingById(l.ingId), units = ing ? CC.unitOptions(ing) : [l.unit];
-    var uo = units.map(function (u) { return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + UNITS[u].label + '</option>'; }).join('');
+    var uo = units.map(function (u) { return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + esc(CC.unitLabel(ing, u)) + '</option>'; }).join('');
     return '<div class="trow"><div class="field full"><label for="tp-ing-' + i + '">Bahan</label><select id="tp-ing-' + i + '" data-tl="ing" data-i="' + i + '">' + opts + '</select></div>' +
       '<div class="field"><label for="tp-qty-' + i + '">Jumlah</label><input id="tp-qty-' + i + '" type="number" inputmode="decimal" min="0" step="any" data-tl="qty" data-i="' + i + '" value="' + (l.qty > 0 ? esc(l.qty) : '') + '"></div>' +
       '<div class="field"><label for="tp-unit-' + i + '">Satuan</label><select id="tp-unit-' + i + '" data-tl="unit" data-i="' + i + '">' + uo + '</select></div>' +
@@ -215,7 +215,7 @@
 
   function tripLineText(l) {
     var ing = CC.ingById(l.ingId), b = ing ? CC.toBase(ing, l.qty, l.unit) : null;
-    return esc(ing ? ing.name : 'Bahan dihapus') + ' ' + nf2.format(l.qty) + ' ' + UNITS[l.unit].label + ', ' + rp(l.price) +
+    return esc(ing ? ing.name : 'Bahan dihapus') + ' ' + nf2.format(l.qty) + ' ' + esc(CC.unitLabel(ing, l.unit)) + ', ' + rp(l.price) +
       (b > 0 ? ' <span class="hint">(' + rpS(l.price / b) + ' per ' + baseLbl(ing.base) + ')</span>' : '');
   }
   function changes() {
@@ -311,7 +311,7 @@
       '<hr class="sep"><h3>Sesuaikan stok</h3>' +
       '<form id="f-adj" data-id="' + esc(id) + '" novalidate><p class="hint" id="adj-h">Isi hasil hitung nyata. Saldo tercatat sekarang ' + fmtQty(i.base, x.balance) + '. Selisihnya dicatat sebagai koreksi, jadi catatan lain tidak berubah.</p>' +
       '<div class="grid2"><div class="field"><label for="adj-q">Hasil hitung</label><input id="adj-q" type="number" inputmode="decimal" min="0" step="any" aria-describedby="adj-h"></div>' +
-      '<div class="field"><label for="adj-u">Satuan</label><select id="adj-u">' + uo.filter(function (u) { return UNITS[u].fam === (i.base === 'g' ? 'm' : i.base === 'ml' ? 'v' : 'p'); }).map(function (u) { return '<option value="' + u + '"' + (u === dispUnit ? ' selected' : '') + '>' + UNITS[u].label + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="field"><label for="adj-u">Satuan</label><select id="adj-u">' + uo.filter(function (u) { return UNITS[u].fam === (i.base === 'g' ? 'm' : i.base === 'ml' ? 'v' : 'p') || u === 'pcs'; }).map(function (u) { return '<option value="' + u + '"' + (u === dispUnit ? ' selected' : '') + '>' + esc(CC.unitLabel(i, u)) + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="field" style="max-width:220px"><label for="adj-date">Tanggal hitung</label><input id="adj-date" type="date" value="' + today() + '"></div>' +
       '<p class="err" id="adj-err" role="alert"></p><div class="actions"><button type="submit" class="btn primary">Sesuaikan stok</button></div></form>' +
       (adjs.length ? '<h3>Koreksi stok bahan ini</h3><ul class="hist">' + adjs.map(function (a) {
@@ -328,7 +328,7 @@
     var q = num($('#adj-q', dlg).value), u = $('#adj-u', dlg).value, date = $('#adj-date', dlg).value;
     if (!date) { err.textContent = 'Pilih tanggal hitung.'; return; }
     if (q == null || q < 0) { err.textContent = 'Isi hasil hitung, 0 atau lebih.'; $('#adj-q', dlg).focus(); return; }
-    var b = CC.toBase(ing, q, u); if (b == null) { err.textContent = 'Satuan tidak cocok dengan bahan.'; return; }
+    var b = q === 0 ? 0 : CC.toBase(ing, q, u); if (b == null) { err.textContent = 'Satuan tidak cocok dengan bahan.'; return; }
     var delta = b - L[id].balance;
     if (Math.abs(delta) < 1e-9) { err.textContent = 'Sudah sama dengan saldo tercatat, tidak ada yang disesuaikan.'; return; }
     S().stockAdj.push({ id: uid('a'), date: date, ingId: id, counted: b, delta: delta });
@@ -368,11 +368,11 @@
   function openOpname() {
     var st = S(), L = CC.ledger(), ids = st.ingredients.slice().sort(function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; });
     var rows = ids.map(function (i, k) {
-      var x = L[i.id], uo = CC.unitOptions(i).filter(function (u) { return UNITS[u].fam === (i.base === 'g' ? 'm' : i.base === 'ml' ? 'v' : 'p'); });
+      var x = L[i.id], uo = CC.unitOptions(i).filter(function (u) { return UNITS[u].fam === (i.base === 'g' ? 'm' : i.base === 'ml' ? 'v' : 'p') || u === 'pcs'; });
       var def = i.base === 'g' ? 'kg' : i.base === 'ml' ? 'l' : 'pcs';
       return '<div class="orow"><span class="nm">' + esc(i.name) + '</span><span class="sys hint">Tercatat ' + fmtQty(i.base, x.balance) + '</span>' +
         '<div class="field"><label for="op-q-' + k + '">Hasil hitung</label><input id="op-q-' + k + '" type="number" inputmode="decimal" min="0" step="any" data-ing="' + esc(i.id) + '"></div>' +
-        '<div class="field"><label for="op-u-' + k + '">Satuan</label><select id="op-u-' + k + '">' + uo.map(function (u) { return '<option value="' + u + '"' + (u === def ? ' selected' : '') + '>' + UNITS[u].label + '</option>'; }).join('') + '</select></div></div>';
+        '<div class="field"><label for="op-u-' + k + '">Satuan</label><select id="op-u-' + k + '">' + uo.map(function (u) { return '<option value="' + u + '"' + (u === def ? ' selected' : '') + '>' + esc(CC.unitLabel(i, u)) + '</option>'; }).join('') + '</select></div></div>';
     }).join('');
     openDlg(dlgHead('Stok opname') + '<form id="f-opname" novalidate><p class="hint">Isi hanya bahan yang kamu hitung. Selisih dengan saldo tercatat dicatat sebagai koreksi, bahan yang dikosongkan tidak diubah.</p>' +
       '<div class="field" style="max-width:220px"><label for="op-date">Tanggal hitung</label><input id="op-date" type="date" value="' + today() + '"></div>' + rows +
@@ -383,7 +383,7 @@
     if (!date) { $('#op-err', dlg).textContent = 'Pilih tanggal hitung.'; return; }
     dlg.querySelectorAll('input[data-ing]').forEach(function (inp, k) {
       var q = num(inp.value); if (q == null || q < 0) return;
-      var ing = CC.ingById(inp.getAttribute('data-ing')), u = $('#op-u-' + k, dlg).value, b = CC.toBase(ing, q, u);
+      var ing = CC.ingById(inp.getAttribute('data-ing')), u = $('#op-u-' + k, dlg).value, b = q === 0 ? 0 : CC.toBase(ing, q, u);
       if (b == null) return;
       var delta = b - L[ing.id].balance;
       if (Math.abs(delta) < 1e-9) return;
