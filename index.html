@@ -598,6 +598,43 @@ dialog[open] { animation: cc-pop .22s var(--ease); }
 input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; text-align: left; }
 input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .grid2 > .field { min-width: 0; }
+
+/* pintasan dashboard: ubin besar, mudah disentuh di HP */
+.quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: -8px 0 26px; }
+@media (min-width: 700px) { .quick { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.qa {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 10px;
+  min-height: 88px; padding: 12px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink);
+  font-weight: 700; font-size: .875rem; line-height: 1.2; transition: transform .15s var(--ease), box-shadow .15s, background-color .15s;
+}
+.qa svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; padding: 7px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); box-sizing: content-box; }
+.qa:nth-child(1) svg { background: var(--warn-soft); color: var(--warn); }
+.qa:hover { transform: translateY(-2px); box-shadow: var(--shadow-up); }
+.qa:active { transform: scale(.98); }
+.qa:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.qa:disabled { cursor: not-allowed; opacity: .5; transform: none; box-shadow: none; }
+/* langkah awal */
+.steps { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: var(--rc); box-shadow: var(--shadow); }
+.steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); }
+.steps li:first-child { border-top: 0; }
+.steps li > div { display: grid; gap: 2px; }
+.steps li .btn { grid-column: 2; justify-self: start; margin-top: 6px; }
+@media (min-width: 700px) { .steps li { grid-template-columns: 32px minmax(0, 1fr) auto; } .steps li .btn { grid-column: auto; margin-top: 0; } }
+.steps .num { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--warn-soft); color: var(--warn); font-family: var(--font-display); }
+.steps li.done .num { background: var(--accent); color: var(--accent-ink); }
+.steps li.done b { color: var(--ink-2); }
+/* tab jenis di Bank of Goods */
+.seg.tabs { margin-bottom: 16px; }
+.seg.tabs label { min-height: 40px; }
+.h3s { font-family: var(--font-display); font-size: 1rem; font-weight: 800; }
+.grid2 .full { grid-column: 1 / -1; }
+.chkrow { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-weight: 600; font-size: .9375rem; }
+.chkrow input { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; margin: 0; flex: none; }
+.sec .acts { margin-top: 0; }
+#view.enter .quick > * { animation: cc-rise .4s var(--ease) both; }
+#view.enter .quick > *:nth-child(2) { animation-delay: .04s; } #view.enter .quick > *:nth-child(3) { animation-delay: .08s; }
+#view.enter .quick > *:nth-child(4) { animation-delay: .12s; } #view.enter .quick > *:nth-child(5) { animation-delay: .16s; } #view.enter .quick > *:nth-child(6) { animation-delay: .2s; }
+@media (prefers-reduced-motion: reduce) { #view.enter .quick > * { animation: none; } .qa, .qa:hover, .qa:active { transition: none; transform: none; } }
 </style>
 </head>
 <body>
@@ -808,7 +845,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       return c ? c.perBase : null;
     }
     var a = purchasesBase(ing);
-    if (!a.length) return null;
+    if (!a.length) return refPerBase(ing);
     if (state.settings.priceMode === 'avg') {
       var tp = 0, tb = 0;
       a.forEach(function (x) { tp += x.p.price; tb += x.b; });
@@ -817,6 +854,27 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     var last = sortedByDate(a).pop();
     return last.p.price / last.b;
   }
+  /* harga acuan: harga dari struk atau supplier tanpa menambah stok, dipakai sampai ada belanja */
+  var ui = {};
+  function refPerBase(ing) {
+    var r = ing.refPrice; if (!r || !(r.price >= 0)) return null;
+    var b = toBase(ing, r.qty, r.unit); return b > 0 ? r.price / b : null;
+  }
+  function isPerl(i) { return i.kind === 'perlengkapan'; }
+  /* pilihan bahan dikelompokkan; withNew menambah "+ Bahan baru" di akhir */
+  function ingOptionsHTML(list, sel, withNew) {
+    var g = [['Bahan baku', list.filter(function (i) { return !i.homemadeId && !isPerl(i); })],
+      ['Bahan homemade', list.filter(function (i) { return !!i.homemadeId; })],
+      ['Perlengkapan', list.filter(isPerl)]];
+    var h = sel ? '' : '<option value="" selected disabled>Pilih bahan</option>';
+    g.forEach(function (x) {
+      if (!x[1].length) return;
+      h += '<optgroup label="' + x[0] + '">' + x[1].map(function (i) { return '<option value="' + esc(i.id) + '"' + (i.id === sel ? ' selected' : '') + '>' + esc(i.name) + '</option>'; }).join('') + '</optgroup>';
+    });
+    if (withNew) h += '<option value="__new">+ Bahan atau perlengkapan baru</option>';
+    return h;
+  }
+  function recipeUnit(ing) { return ing.base === 'pcs' ? 'pcs' : ing.base; }
   function lastPurchase(ing) {
     var a = sortedByDate(purchasesBase(ing));
     return a.length ? a[a.length - 1].p : null;
@@ -900,18 +958,21 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       '<button type="button" class="namebtn" data-act="open-ing" data-id="' + esc(ing.id) + '">' + esc(ing.name) + '</button>' +
       (ing.homemadeId
         ? '<p class="meta"><span class="pill">Homemade</span> ' + esc(homemadeInfo(ing)) + '</p>'
-        : '<p class="meta">' + (lp ? 'Beli terakhir ' + nf2.format(lp.qty) + ' ' + esc(unitLabel(ing, lp.unit)) + ' seharga ' + rp(lp.price) + ', ' + esc(fmtDate(lp.date)) : 'Belum ada pembelian yang valid') + (packText(ing) ? '. Isi ' + esc(packText(ing)) + ' per pcs' : '') + '</p>') +
+        : '<p class="meta">' + (isPerl(ing) ? '<span class="pill">Perlengkapan</span> ' : '') + (lp ? 'Beli terakhir ' + nf2.format(lp.qty) + ' ' + esc(unitLabel(ing, lp.unit)) + ' seharga ' + rp(lp.price) + ', ' + esc(fmtDate(lp.date))
+          : ing.refPrice && refPerBase(ing) != null ? 'Harga acuan ' + nf2.format(ing.refPrice.qty) + ' ' + esc(unitLabel(ing, ing.refPrice.unit)) + ' ' + rp(ing.refPrice.price) + ', belum ada belanja' : 'Harga belum diisi') + (packText(ing) ? '. Isi ' + esc(packText(ing)) + ' per pcs' : '') + '</p>') +
       '<p class="meta">' + (n ? 'Dipakai di ' + n + ' resep' : 'Belum dipakai di resep mana pun') + '</p></div>' +
-      '<div class="price">' + (ppb != null ? '<b>' + rpSmall(ppb) + '</b><span>per ' + baseLabel(ing.base) + (alt ? ', ' + alt : '') + '</span>' : '<b>-</b><span>harga belum bisa dihitung</span>') + '</div></li>';
+      '<div class="price">' + (ppb != null ? '<b>' + rpSmall(ppb) + '</b><span>per ' + baseLabel(ing.base) + (alt ? ', ' + alt : '') + '</span>' : '<b>-</b><span>isi harga di detail</span>') + '</div></li>';
   }
   function ingListHTML(q) {
     q = (q || '').trim().toLowerCase();
-    var list = state.ingredients.filter(function (i) { return !q || i.name.toLowerCase().indexOf(q) > -1; });
+    var k = ui.bankKind || 'all';
+    var list = state.ingredients.filter(function (i) { return (!q || i.name.toLowerCase().indexOf(q) > -1) && (k === 'all' || (k === 'perlengkapan') === isPerl(i)); });
     if (!state.ingredients.length) {
-      return '<div class="empty"><p>Bank of Goods masih kosong. Catat bahan pertama dari struk belanja, lengkap dengan jumlah dan harga total.</p><button type="button" class="btn primary" data-act="new-ing">Tambah bahan pertama</button></div>';
+      return '<div class="empty"><p>Bank of Goods masih kosong. Masukkan bahan baku dan perlengkapan beserta harga belinya. Stok baru bertambah saat belanja dicatat.</p><div class="acts"><button type="button" class="btn primary" data-act="new-ing">Tambah bahan baku</button><button type="button" class="btn" data-act="new-perl">Tambah perlengkapan</button></div></div>';
     }
     if (!list.length) {
-      return '<div class="empty"><p>Tidak ada bahan dengan nama "' + esc(q) + '". Cek ejaan, atau tambahkan sebagai bahan baru.</p></div>';
+      return '<div class="empty"><p>' + (q ? 'Tidak ada yang cocok dengan "' + esc(q) + '". Cek ejaan, atau tambahkan sebagai bahan baru.' : (k === 'perlengkapan' ? 'Belum ada perlengkapan. Tambahkan cup, tutup, sedotan, dan sejenisnya supaya ikut dihitung di COGS.' : 'Belum ada bahan baku.')) + '</p>' +
+        '<button type="button" class="btn" data-act="' + (k === 'perlengkapan' ? 'new-perl' : 'new-ing') + '">' + (k === 'perlengkapan' ? 'Tambah perlengkapan' : 'Tambah bahan baku') + '</button></div>';
     }
     return '<ul class="rows">' + list.map(ingRowHTML).join('') + '</ul>';
   }
@@ -920,9 +981,11 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     view.innerHTML =
       '<section aria-labelledby="h-bank">' +
       '<div class="pagehead"><div><h1 id="h-bank" tabindex="-1">Bank of Goods</h1>' +
-      '<p class="lede">Bahan baku dan harga belinya. Satu bahan dipakai ulang di semua menu, dan harga per gram dihitung otomatis dari struk.</p></div>' +
-      '<div class="acts" style="margin:0"><a class="btn" href="#homemade">Bahan homemade</a><button type="button" class="btn primary" data-act="new-ing">Tambah bahan</button></div></div>' +
-      '<div class="toolbar"><div class="field"><label for="q">Cari bahan</label><input id="q" type="search" autocomplete="off"></div>' +
+      '<p class="lede">Bahan baku, perlengkapan, dan harga belinya. Dipakai ulang di semua menu. Harga per gram dihitung otomatis.</p></div>' +
+      '<div class="acts" style="margin:0"><a class="btn" href="#homemade">Bahan homemade</a><button type="button" class="btn" data-act="new-perl">Tambah perlengkapan</button><button type="button" class="btn primary" data-act="new-ing">Tambah bahan</button></div></div>' +
+      '<fieldset class="seg tabs"><legend class="sr">Tampilkan</legend>' + [['all', 'Semua'], ['bahan', 'Bahan baku'], ['perlengkapan', 'Perlengkapan']].map(function (x) {
+        return '<label><input type="radio" name="bk" value="' + x[0] + '"' + ((ui.bankKind || 'all') === x[0] ? ' checked' : '') + '>' + x[1] + '</label>'; }).join('') + '</fieldset>' +
+      '<div class="toolbar"><div class="field"><label for="q">Cari</label><input id="q" type="search" autocomplete="off"></div>' +
       '<fieldset class="seg"><legend>Harga yang dipakai di COGS</legend>' +
       '<label><input type="radio" name="pm" value="latest"' + (pm === 'latest' ? ' checked' : '') + '>Pembelian terakhir</label>' +
       '<label><input type="radio" name="pm" value="avg"' + (pm === 'avg' ? ' checked' : '') + '>Rata-rata tertimbang</label></fieldset></div>' +
@@ -932,13 +995,11 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
   /* ---------- Menu and COGS ---------- */
   function lineHTML(m, l, calc) {
     var ing = ingById(l.ingId);
-    var opts = state.ingredients.map(function (i) {
-      return '<option value="' + esc(i.id) + '"' + (i.id === l.ingId ? ' selected' : '') + '>' + esc(i.name) + '</option>';
-    }).join('');
-    if (!ing) opts = '<option value="" selected>Bahan sudah dihapus</option>' + opts;
+    var opts = ingOptionsHTML(state.ingredients, ing ? l.ingId : '', true);
+    if (!ing) opts = '<option value="" selected>' + (l.ingId ? 'Bahan sudah dihapus' : 'Pilih bahan') + '</option>' + opts.replace('<option value="" selected disabled>Pilih bahan</option>', '');
     var units = ing ? unitOptions(ing) : [l.unit];
     var uopts = units.map(function (u) {
-      return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + UNITS[u].label + '</option>';
+      return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + esc(unitLabel(ing, u)) + '</option>';
     }).join('');
     var name = ing ? ing.name : 'bahan';
     return '<li class="line" data-line="' + esc(l.id) + '">' +
@@ -961,8 +1022,9 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     var none = !state.ingredients.length;
     return '<section class="sec" aria-labelledby="sec-' + sec + '"><header><h2 id="sec-' + sec + '">' + title + '</h2><p class="hint">' + desc + '</p></header>' +
       (lines.length ? '<ul class="lines">' + lines.map(function (l) { return lineHTML(m, l, calc); }).join('') + '</ul>' : '<p class="line-empty">Belum ada bahan di bagian ini.</p>') +
-      '<div><button type="button" class="btn" data-act="add-line" data-sec="' + sec + '"' + (none ? ' disabled' : '') + '>Tambah bahan</button>' +
-      (none ? ' <span class="hint">Isi Bank of Goods dulu.</span>' : '') + '</div></section>';
+      '<div class="acts">' + (none ? '' : '<button type="button" class="btn" data-act="add-line" data-sec="' + sec + '">Pilih dari Bank of Goods</button>') +
+      '<button type="button" class="btn' + (none ? ' primary' : ' quiet') + '" data-act="add-line-new" data-sec="' + sec + '">+ Bahan baru</button></div>' +
+      (none ? '<p class="hint">Bank of Goods masih kosong. Tambahkan bahan di sini, langsung masuk resep dan Bank of Goods.</p>' : '') + '</section>';
   }
   function strukHTML(m, c) {
     var h = '<h2 id="h-struk">Struk COGS per cup</h2>';
@@ -1013,8 +1075,8 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       '</div>' +
       '<div class="struk" id="struk" aria-labelledby="h-struk">' + strukHTML(m, c) + '</div>' +
       '<div class="sections">' +
-      sectionHTML(m, 'rtd', 'RTD dari central', 'Isi cup yang dibuat di central kitchen dan dikirim siap jual.', c) +
-      sectionHTML(m, 'cart', 'Tambahan di cart', 'Es dan topping yang ditambah di cart. Biayanya masuk COGS, stoknya belum dilacak.', c) +
+      sectionHTML(m, 'rtd', 'RTD dari central', 'Isi dan kemasan cup yang dibuat di central kitchen: kopi, susu, sirup, cup, tutup, stiker.', c) +
+      sectionHTML(m, 'cart', 'Tambahan di cart', 'Yang ditambah di cart: es, topping, sedotan, kantong. Biayanya masuk COGS, stoknya berkurang lewat turus di rekap harian.', c) +
       '</div></div><div class="minibar" id="minibar" role="status" aria-live="off">' + miniHTML(c) + '</div></section>';
   }
   function miniHTML(c) {
@@ -1054,66 +1116,96 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     return each + 'Setara ' + rpSmall(price / b) + ' per ' + baseLabel(ing.base) + '.';
   }
 
-  function openNewIng() {
-    openDlg(dlgHead('Bahan baru') +
+  /* bahan baru: dibuka dari Bank of Goods, editor menu, belanja, atau dashboard. ctx.onSaved(ing) untuk kembali ke alur asal */
+  var niCtx = {};
+  function openNewIng(ctx) {
+    niCtx = ctx || {};
+    var perl = niCtx.kind === 'perlengkapan', fromTrip = !!niCtx.fromTrip;
+    openDlg(dlgHead(perl ? 'Perlengkapan baru' : 'Bahan baru') +
       '<form id="f-new-ing" novalidate>' +
-      '<div class="field"><label for="ni-name">Nama bahan</label><input id="ni-name" type="text" autocomplete="off"></div>' +
+      '<fieldset class="seg"><legend>Jenis</legend>' +
+      '<label><input type="radio" name="ni-kind" value="bahan"' + (perl ? '' : ' checked') + '>Bahan baku</label>' +
+      '<label><input type="radio" name="ni-kind" value="perlengkapan"' + (perl ? ' checked' : '') + '>Perlengkapan</label></fieldset>' +
+      '<p class="hint" id="ni-kind-h">' + (perl ? 'Cup, tutup, sedotan, stiker, kantong. Dihitung per pcs.' : 'Kopi, susu, sirup, es, dan bahan lain yang masuk ke minuman.') + '</p>' +
+      '<div class="field"><label for="ni-name">Nama</label><input id="ni-name" type="text" autocomplete="off" value="' + esc(niCtx.name || '') + '"></div>' +
+      '<div id="ni-raw" class="hl">' +
       '<fieldset class="seg"><legend>Satuan dasar untuk menghitung harga</legend>' +
       '<label><input type="radio" name="ni-base" value="g" checked>Gram</label>' +
       '<label><input type="radio" name="ni-base" value="ml">Mililiter</label>' +
       '<label><input type="radio" name="ni-base" value="pcs">Pcs</label></fieldset>' +
-      '<div class="field" id="ni-dens-wrap"><label for="ni-dens">Berat jenis (gram per ml), opsional</label><input id="ni-dens" type="number" inputmode="decimal" min="0" step="any" aria-describedby="ni-dens-h"><span class="hint" id="ni-dens-h">Isi 1 untuk air supaya resep boleh pakai gram atau ml. Kosongkan kalau tidak perlu.</span></div>' +
-      '<div class="field" id="ni-pack-wrap"><label for="ni-pack">Isi per pcs / kemasan, opsional</label><div class="packrow"><input id="ni-pack" type="number" inputmode="decimal" min="0" step="any" aria-describedby="ni-pack-h"><select id="ni-pack-u" aria-label="Satuan isi kemasan"></select></div><span class="hint" id="ni-pack-h">Misal susu UHT 950 gr per kotak. Dengan ini belanja bisa dicatat per pcs, harga per gram dihitung otomatis.</span></div>' +
-      '<hr class="sep"><p class="hint">Pembelian pertama, sesuai struk.</p>' +
-      '<div class="grid2"><div class="field"><label for="ni-date">Tanggal beli</label><input id="ni-date" type="date" value="' + todayISO() + '"></div>' +
-      '<div class="field"><label for="ni-qty">Jumlah</label><input id="ni-qty" type="number" inputmode="decimal" min="0" step="any"></div>' +
-      '<div class="field"><label for="ni-unit">Satuan</label><span id="ni-unit-wrap"></span></div>' +
-      '<div class="field"><label for="ni-price">Harga total (Rp)</label><input id="ni-price" type="number" inputmode="numeric" min="0" step="any"></div></div>' +
-      '<p class="preview" id="ni-prev" aria-live="polite"></p><p class="err" id="ni-err" role="alert"></p>' +
-      '<div class="actions"><button type="button" class="btn" data-act="close">Batal</button><button type="submit" class="btn primary">Simpan bahan</button></div></form>', '#ni-name');
+      '<div class="field" id="ni-pack-wrap"><label for="ni-pack">Isi per pcs / kemasan, opsional</label><div class="packrow"><input id="ni-pack" type="number" inputmode="decimal" min="0" step="any" aria-describedby="ni-pack-h"><select id="ni-pack-u" aria-label="Satuan isi kemasan"></select></div><span class="hint" id="ni-pack-h">Misal susu UHT 950 gr per kotak. Harga lalu bisa diisi per pcs.</span></div>' +
+      '<div class="field" id="ni-dens-wrap"><label for="ni-dens">Berat jenis (gram per ml), opsional</label><input id="ni-dens" type="number" inputmode="decimal" min="0" step="any" aria-describedby="ni-dens-h"><span class="hint" id="ni-dens-h">Isi 1 untuk air supaya resep boleh pakai gram atau ml.</span></div>' +
+      '</div>' +
+      (fromTrip ? '<p class="hint">Harga dan jumlah diisi di baris belanja setelah ini.</p>' :
+        '<hr class="sep"><div class="hl"><h3 class="h3s">Harga beli</h3><p class="hint">Dari struk, nota, atau daftar harga supplier. Dipakai menghitung COGS. Boleh dikosongkan dulu.</p></div>' +
+        '<div class="grid2"><div class="field"><label for="ni-qty">Jumlah</label><input id="ni-qty" type="number" inputmode="decimal" min="0" step="any"></div>' +
+        '<div class="field"><label for="ni-unit">Satuan</label><span id="ni-unit-wrap"></span></div>' +
+        '<div class="field full"><label for="ni-price">Harga total (Rp)</label><input id="ni-price" type="number" inputmode="numeric" min="0" step="any"></div></div>' +
+        '<p class="preview" id="ni-prev" aria-live="polite"></p>' +
+        '<label class="chkrow"><input type="checkbox" id="ni-buy"><span>Ini belanja sungguhan, tambahkan ke stok</span></label>' +
+        '<div class="field" id="ni-date-wrap" hidden><label for="ni-date">Tanggal beli</label><input id="ni-date" type="date" value="' + todayISO() + '"></div>') +
+      '<p class="err" id="ni-err" role="alert"></p>' +
+      '<div class="actions"><button type="button" class="btn" data-act="ni-cancel">Batal</button><button type="submit" class="btn primary">Simpan</button></div></form>', '#ni-name');
     refreshNewIng();
   }
   function newIngDraft() {
-    var base = ($('input[name="ni-base"]:checked', dlg) || {}).value || 'g';
+    var kind = (($('input[name="ni-kind"]:checked', dlg) || {}).value) === 'perlengkapan' ? 'perlengkapan' : 'bahan';
+    var base = kind === 'perlengkapan' ? 'pcs' : (($('input[name="ni-base"]:checked', dlg) || {}).value || 'g');
     var pq = numOrNull($('#ni-pack', dlg).value), pu = $('#ni-pack-u', dlg) ? $('#ni-pack-u', dlg).value : base;
     var ps = base !== 'pcs' && pq > 0 && UNITS[pu] ? pq * UNITS[pu].f : null;
-    return { base: base, density: numOrNull($('#ni-dens', dlg).value), packSize: ps };
+    return { kind: kind, base: base, density: numOrNull($('#ni-dens', dlg).value), packSize: ps };
   }
   function packUnitOpts(base, sel) {
     var u = base === 'ml' ? ['ml', 'l'] : ['g', 'kg'];
     return u.map(function (x) { return '<option value="' + x + '"' + (x === sel ? ' selected' : '') + '>' + UNITS[x].label + '</option>'; }).join('');
   }
   function refreshNewIng(keepUnit) {
-    var d = newIngDraft();
+    var d = newIngDraft(), perl = d.kind === 'perlengkapan';
+    $('#ni-raw', dlg).hidden = perl;
+    $('#dlg-title', dlg).textContent = perl ? 'Perlengkapan baru' : 'Bahan baru';
+    $('#ni-kind-h', dlg).textContent = perl ? 'Cup, tutup, sedotan, stiker, kantong. Dihitung per pcs.' : 'Kopi, susu, sirup, es, dan bahan lain yang masuk ke minuman.';
     $('#ni-dens-wrap', dlg).hidden = d.base === 'pcs';
     $('#ni-pack-wrap', dlg).hidden = d.base === 'pcs';
-    var pu = $('#ni-pack-u', dlg), puv = pu.value;
-    if (!pu.options.length || UNITS[puv].fam !== BASE_FAM[d.base]) { pu.innerHTML = packUnitOpts(d.base, d.base === 'ml' ? 'ml' : 'g'); d = newIngDraft(); }
+    var pu = $('#ni-pack-u', dlg);
+    if (!pu.options.length || (d.base !== 'pcs' && UNITS[pu.value].fam !== BASE_FAM[d.base])) { pu.innerHTML = packUnitOpts(d.base, d.base === 'ml' ? 'ml' : 'g'); d = newIngDraft(); }
+    var w = $('#ni-unit-wrap', dlg); if (!w) return;
     var cur = $('#ni-unit', dlg) ? $('#ni-unit', dlg).value : null;
     var opts = unitOptions(d);
-    var sel = keepUnit && opts.indexOf(cur) > -1 ? cur : (d.packSize > 0 ? 'pcs' : opts[opts.length ? (d.base === 'pcs' ? 0 : 1) : 0]);
-    $('#ni-unit-wrap', dlg).innerHTML = unitSelectHTML(d, sel, 'ni-unit');
+    var sel = keepUnit && opts.indexOf(cur) > -1 ? cur : (d.packSize > 0 || d.base === 'pcs' ? 'pcs' : opts[opts.length > 1 ? 1 : 0]);
+    w.innerHTML = unitSelectHTML(d, sel, 'ni-unit');
     updateNewIngPreview();
   }
   function updateNewIngPreview() {
-    var d = newIngDraft();
-    $('#ni-prev', dlg).textContent = previewFor(d, numOrNull($('#ni-qty', dlg).value), $('#ni-unit', dlg).value, numOrNull($('#ni-price', dlg).value));
+    var pv = $('#ni-prev', dlg); if (!pv) return;
+    var d = newIngDraft(), q = numOrNull($('#ni-qty', dlg).value), pr = numOrNull($('#ni-price', dlg).value);
+    pv.textContent = q == null && pr == null ? 'Tanpa harga, bahan tetap bisa dipakai di resep. COGS lengkap setelah harga diisi.' : previewFor(d, q, $('#ni-unit', dlg).value, pr);
   }
   function submitNewIng() {
-    var d = newIngDraft(), name = $('#ni-name', dlg).value.trim();
-    var qty = numOrNull($('#ni-qty', dlg).value), price = numOrNull($('#ni-price', dlg).value);
-    var unit = $('#ni-unit', dlg).value, date = $('#ni-date', dlg).value;
-    var err = $('#ni-err', dlg);
-    if (!name) { err.textContent = 'Isi nama bahan.'; $('#ni-name', dlg).focus(); return; }
-    if (state.ingredients.some(function (i) { return i.name.toLowerCase() === name.toLowerCase(); })) { err.textContent = 'Bahan dengan nama ini sudah ada. Buka bahannya dan tambahkan pembelian baru.'; $('#ni-name', dlg).focus(); return; }
-    if (!(qty > 0)) { err.textContent = 'Isi jumlah yang lebih dari 0.'; $('#ni-qty', dlg).focus(); return; }
-    if (!(price >= 0) || price === null) { err.textContent = 'Isi harga total, boleh 0 bila gratis.'; $('#ni-price', dlg).focus(); return; }
-    if (!date) { err.textContent = 'Pilih tanggal beli.'; $('#ni-date', dlg).focus(); return; }
-    var ing = { id: uid('i'), name: name, base: d.base, density: d.base === 'pcs' ? null : (d.density > 0 ? d.density : null), packSize: d.packSize > 0 ? d.packSize : null, purchases: [] };
-    if (toBase(ing, qty, unit) == null) { err.textContent = 'Satuan tidak cocok dengan satuan dasar. Isi berat jenis atau ganti satuan.'; return; }
-    ing.purchases.push({ id: uid('p'), date: date, qty: qty, unit: unit, price: price });
-    state.ingredients.push(ing); save(); closeDlg(); render(); toast('Bahan "' + name + '" disimpan.');
+    var d = newIngDraft(), name = $('#ni-name', dlg).value.trim(), err = $('#ni-err', dlg);
+    if (!name) { err.textContent = 'Isi nama.'; $('#ni-name', dlg).focus(); return; }
+    if (state.ingredients.some(function (i) { return i.name.toLowerCase() === name.toLowerCase(); })) { err.textContent = 'Nama ini sudah ada di Bank of Goods. Pakai nama lain atau pilih yang sudah ada.'; $('#ni-name', dlg).focus(); return; }
+    var ing = { id: uid('i'), name: name, kind: d.kind, base: d.base, density: d.base === 'pcs' ? null : (d.density > 0 ? d.density : null), packSize: d.packSize > 0 ? d.packSize : null, purchases: [], refPrice: null };
+    var qEl = $('#ni-qty', dlg);
+    if (qEl) {
+      var qty = numOrNull(qEl.value), price = numOrNull($('#ni-price', dlg).value), unit = $('#ni-unit', dlg).value;
+      var buy = $('#ni-buy', dlg).checked, date = $('#ni-date', dlg).value;
+      if (qty != null || price != null || buy) {
+        if (!(qty > 0)) { err.textContent = 'Isi jumlah yang lebih dari 0, atau kosongkan jumlah dan harga.'; qEl.focus(); return; }
+        if (price == null || !(price >= 0)) { err.textContent = 'Isi harga total, boleh 0 bila gratis.'; $('#ni-price', dlg).focus(); return; }
+        if (toBase(ing, qty, unit) == null) { err.textContent = 'Satuan tidak cocok dengan satuan dasar. Isi berat jenis atau ganti satuan.'; return; }
+        if (buy) {
+          if (!date) { err.textContent = 'Pilih tanggal beli.'; $('#ni-date', dlg).focus(); return; }
+          ing.purchases.push({ id: uid('p'), date: date, qty: qty, unit: unit, price: price });
+        } else ing.refPrice = { qty: qty, unit: unit, price: price, date: todayISO() };
+      }
+    }
+    state.ingredients.push(ing); save();
+    var ctx = niCtx; niCtx = {};
+    toast((d.kind === 'perlengkapan' ? 'Perlengkapan "' : 'Bahan "') + name + '" disimpan.');
+    if (ctx.onSaved) { ctx.onSaved(ing); return; }
+    closeDlg(); render();
   }
+  function cancelNewIng() { var ctx = niCtx; niCtx = {}; if (ctx.onCancel) ctx.onCancel(); else closeDlg(); }
 
   function openIng(id, focusSel) {
     var ing = ingById(id); if (!ing) return;
@@ -1133,6 +1225,11 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       '<form id="f-edit-ing" data-id="' + esc(ing.id) + '" novalidate>' +
       '<div class="field"><label for="ei-name">Nama bahan</label><input id="ei-name" type="text" value="' + esc(ing.name) + '" autocomplete="off"></div>' +
       '<p class="hint">Satuan dasar: ' + baseLabel(ing.base) + '</p>' +
+      (ing.base === 'pcs' && !ing.homemadeId ? '<fieldset class="seg"><legend>Jenis</legend><label><input type="radio" name="ei-kind" value="bahan"' + (isPerl(ing) ? '' : ' checked') + '>Bahan baku</label><label><input type="radio" name="ei-kind" value="perlengkapan"' + (isPerl(ing) ? ' checked' : '') + '>Perlengkapan</label></fieldset>' : '') +
+      (!ing.purchases.length ? '<div class="hl"><h3 class="h3s">Harga acuan</h3><p class="hint">Dipakai di COGS sampai ada belanja tercatat. Tidak menambah stok.</p></div><div class="grid2">' +
+        '<div class="field"><label for="ei-rq">Jumlah</label><input id="ei-rq" type="number" inputmode="decimal" min="0" step="any" value="' + (ing.refPrice ? esc(ing.refPrice.qty) : '') + '"></div>' +
+        '<div class="field"><label for="ei-ru">Satuan</label>' + unitSelectHTML(ing, ing.refPrice ? ing.refPrice.unit : (ing.packSize > 0 || ing.base === 'pcs' ? 'pcs' : unitOptions(ing)[1] || unitOptions(ing)[0]), 'ei-ru') + '</div>' +
+        '<div class="field full"><label for="ei-rp">Harga total (Rp)</label><input id="ei-rp" type="number" inputmode="numeric" min="0" step="any" value="' + (ing.refPrice ? esc(ing.refPrice.price) : '') + '"></div></div>' : '') +
       (ing.base !== 'pcs' ? '<div class="field"><label for="ei-dens">Berat jenis (gram per ml), opsional</label><input id="ei-dens" type="number" inputmode="decimal" min="0" step="any" value="' + (ing.density > 0 ? esc(ing.density) : '') + '"></div>' +
         '<div class="field"><label for="ei-pack">Isi per pcs / kemasan (' + baseLabel(ing.base) + '), opsional</label><input id="ei-pack" type="number" inputmode="decimal" min="0" step="any" value="' + (ing.packSize > 0 ? esc(ing.packSize) : '') + '" aria-describedby="ei-pack-h"><span class="hint" id="ei-pack-h">Misal 950 untuk susu 950 gr per kotak. Belanja lalu bisa dicatat per pcs.</span></div>' : '') +
       '<p class="err" id="ei-err" role="alert"></p>' +
@@ -1198,8 +1295,10 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       bank: '<path d="M4 20h16M6 20V10M10 20V10M14 20V10M18 20V10M3 10l9-6 9 6z"/>',
       laporan: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
       pengaturan: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"/>',
+      tambah: '<path d="M12 5v14M5 12h14"/>',
       more: '<path d="M5 12h.01M12 12h.01M19 12h.01"/>'
     };
+    window.CC.icons = IC;
     function ico(k) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[k] || '') + '</svg>'; }
     navEl.innerHTML = routeList().map(function (r) {
       return '<a href="#' + r.id + '" data-nav="' + r.id + '"' + (r.def.primary ? '' : ' class="more"') + '>' + ico(r.id) + '<span>' + esc(r.def.label) + '</span></a>';
@@ -1269,6 +1368,8 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     var act = t.getAttribute('data-act'), id = t.getAttribute('data-id');
     if (act === 'close') closeDlg();
     else if (act === 'new-ing') openNewIng();
+    else if (act === 'new-perl') openNewIng({ kind: 'perlengkapan' });
+    else if (act === 'ni-cancel') cancelNewIng();
     else if (act === 'open-ing') {
       var ig0 = ingById(id);
       if (ig0 && ig0.homemadeId) { window.CC.ui.homemadeId = ig0.homemadeId; location.hash = '#homemade'; }
@@ -1303,10 +1404,23 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       state.menus = state.menus.filter(function (x) { return x.id !== id; });
       state.activeMenu = state.menus[0] ? state.menus[0].id : null; save(); closeDlg(); render(); toast('Menu dihapus.');
     }
+    else if (act === 'add-line-new') {
+      var mn2 = menuById(state.activeMenu), sec2 = t.getAttribute('data-sec'); if (!mn2) return;
+      openNewIng({ onSaved: function (ni) {
+        var nl2 = { id: uid('l'), section: sec2, ingId: ni.id, qty: null, unit: recipeUnit(ni) };
+        mn2.lines.push(nl2); save(); closeDlg(); renderMenu(); restoreFocus('#qty-' + nl2.id);
+      } });
+    }
     else if (act === 'add-line') {
       var mm = menuById(state.activeMenu), sec = t.getAttribute('data-sec');
-      if (!mm || !state.ingredients.length) return;
-      var first = state.ingredients[0], nl = { id: uid('l'), section: sec, ingId: first.id, qty: null, unit: unitOptions(first)[0] };
+      if (!mm) return;
+      var nl = { id: uid('l'), section: sec, ingId: '', qty: null, unit: 'g' };
+      if (!state.ingredients.length) {
+        openNewIng({ onSaved: function (ni) { nl.ingId = ni.id; nl.unit = recipeUnit(ni); mm.lines.push(nl); save(); closeDlg(); renderMenu(); restoreFocus('#qty-' + nl.id); } });
+        return;
+      }
+      var raw = state.ingredients.filter(function (i) { return !isPerl(i); })[0] || state.ingredients[0];
+      nl.ingId = raw.id; nl.unit = recipeUnit(raw);
       mm.lines.push(nl); save(); renderMenu(); restoreFocus('#ing-' + nl.id);
     }
     else if (act === 'rm-line') {
@@ -1341,7 +1455,9 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
   document.addEventListener('change', function (e) {
     var t = e.target;
     if (t.name === 'pm') { state.settings.priceMode = t.value; save(); $('#ing-list').innerHTML = ingListHTML($('#q').value); toast('Harga di COGS memakai ' + (t.value === 'avg' ? 'rata-rata tertimbang.' : 'pembelian terakhir.')); return; }
-    if (t.name === 'ni-base') { refreshNewIng(false); return; }
+    if (t.name === 'ni-base' || t.name === 'ni-kind') { refreshNewIng(false); return; }
+    if (t.id === 'ni-buy') { $('#ni-date-wrap', dlg).hidden = !t.checked; return; }
+    if (t.name === 'bk') { ui.bankKind = t.value; $('#ing-list').innerHTML = ingListHTML($('#q').value); return; }
     if (t.id === 'ni-unit') { updateNewIngPreview(); return; }
     if (t.id === 'ni-pack-u') { refreshNewIng(true); return; }
     if (t.id === 'ap-unit') { var ig = ingById($('#f-add-purchase', dlg).getAttribute('data-id')); if (ig) updatePurchasePreview(ig); return; }
@@ -1350,6 +1466,15 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     var m = menuById(state.activeMenu); if (!m) return;
     var lf = t.getAttribute('data-lf'); if (!lf) return;
     var l = m.lines.filter(function (x) { return x.id === t.getAttribute('data-id'); })[0]; if (!l) return;
+    if (lf === 'ing' && t.value === '__new') {
+      var mid = m.id, lid = l.id; t.value = l.ingId || '';
+      openNewIng({ onSaved: function (ni) {
+        var mm = menuById(mid), ll = mm && mm.lines.filter(function (x) { return x.id === lid; })[0];
+        if (ll) { ll.ingId = ni.id; ll.unit = recipeUnit(ni); save(); }
+        closeDlg(); renderMenu(); restoreFocus('#qty-' + lid);
+      } });
+      return;
+    }
     if (lf === 'ing') {
       l.ingId = t.value; var ing = ingById(l.ingId);
       if (ing && unitOptions(ing).indexOf(l.unit) < 0) l.unit = unitOptions(ing)[0];
@@ -1373,7 +1498,20 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       var dEl = $('#ei-dens', dlg), dens = dEl ? numOrNull(dEl.value) : null;
       var pEl = $('#ei-pack', dlg), pack = pEl ? numOrNull(pEl.value) : null;
       if (pEl && !(pack > 0) && ing.packSize > 0 && ing.purchases.some(function (p) { return p.unit === 'pcs'; })) { err.textContent = 'Ada pembelian yang dicatat per pcs. Isi per kemasan tidak bisa dikosongkan.'; pEl.focus(); return; }
+      var rqEl = $('#ei-rq', dlg), ref = ing.refPrice;
+      if (rqEl) {
+        var rq = numOrNull(rqEl.value), rpv = numOrNull($('#ei-rp', dlg).value), ru = $('#ei-ru', dlg).value;
+        if (rq == null && rpv == null) ref = null;
+        else {
+          if (!(rq > 0) || rpv == null || !(rpv >= 0)) { err.textContent = 'Harga acuan: isi jumlah dan harga total, atau kosongkan keduanya.'; rqEl.focus(); return; }
+          var tmp = { base: ing.base, density: dEl ? (dens > 0 ? dens : null) : ing.density, packSize: pEl ? (pack > 0 ? pack : null) : ing.packSize };
+          if (toBase(tmp, rq, ru) == null) { err.textContent = 'Harga acuan: satuan tidak cocok dengan bahan.'; return; }
+          ref = { qty: rq, unit: ru, price: rpv, date: todayISO() };
+        }
+      }
+      var kEl = $('input[name="ei-kind"]:checked', dlg);
       ing.name = nameV; if (dEl) ing.density = dens > 0 ? dens : null; if (pEl) ing.packSize = pack > 0 ? pack : null;
+      ing.refPrice = ref; if (kEl) ing.kind = kEl.value;
       save(); closeDlg(); render(); toast('Perubahan disimpan.');
     }
     else if (f.id === 'f-add-purchase') {
@@ -1411,7 +1549,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     calcMenu: calcMenu, menuById: menuById, ingById: ingById, toBase: toBase, $: $, leader: leader,
     pricePerBase: pricePerBase, unitOptions: unitOptions, unitLabel: unitLabel, packText: packText, calcHomemade: calcHomemade, homemadeById: homemadeById, usedIn: usedIn,
     costOutHTML: costOutHTML, baseLabel: baseLabel,
-    view: view, dlg: dlg, UNITS: UNITS, ui: {},
+    view: view, dlg: dlg, UNITS: UNITS, ui: ui, openNewIng: openNewIng, ingOptionsHTML: ingOptionsHTML, recipeUnit: recipeUnit, isPerl: isPerl, refPerBase: refPerBase,
     applyRemote: function (patch) {
       Object.keys(patch).forEach(function (k) { state[k] = patch[k]; });
       try { window.localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { storageOk = false; }

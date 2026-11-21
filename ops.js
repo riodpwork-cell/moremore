@@ -426,7 +426,35 @@
       '<div class="stat"><b>' + acts.length + '</b><span>perlu tindakan</span></div>' +
       '<div class="stat"><b>' + nf2.format(cupsOk) + '</b><span>cup layak kirim</span></div>' +
       '<div class="stat"><b>' + (vals[13] > 0 ? rp(vals[13]) : 'Rp0') + '</b><span>omzet hari ini</span></div></div></div>';
-    view.innerHTML = '<section aria-labelledby="h-dash">' + hero + '<div class="dash"><div class="col">' +
+    // pintasan: pekerjaan harian yang paling sering
+    var IC = CC.icons || {}, ico = function (n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[n] || '') + '</svg>'; };
+    var quick = '<nav class="quick" aria-label="Pintasan">' + [
+      ['button', 'trip-new', 'belanja', 'Catat belanja'],
+      ['a', '#rekap', 'rekap', 'Rekap harian'],
+      ['button', 'new-batch', 'produksi', 'Catat produksi'],
+      ['button', 'new-ship', 'kirim', 'Kirim ke cart'],
+      ['button', 'new-ing', 'tambah', 'Bahan baru'],
+      ['a', '#menu', 'menu', 'Menu dan COGS']
+    ].map(function (q) {
+      var dis = (q[1] === 'new-batch' || q[1] === 'new-ship') && !st.menus.length;
+      return q[0] === 'a' ? '<a class="qa" href="' + q[1] + '">' + ico(q[2]) + '<span>' + q[3] + '</span></a>'
+        : '<button type="button" class="qa" data-act="' + q[1] + '"' + (dis ? ' disabled' : '') + '>' + ico(q[2]) + '<span>' + q[3] + '</span></button>';
+    }).join('') + '</nav>';
+    // langkah awal: tampil sampai bahan, resep, dan harga jual siap
+    var priced = st.ingredients.filter(function (i) { return !i.homemadeId && CC.pricePerBase(i) != null; }).length;
+    var full = st.menus.filter(function (m) { var c = CC.calcMenu(m); return m.lines.length && !c.missing && !c.bad; }).length;
+    var sold = st.menus.length && st.menus.every(function (m) { return m.price > 0; });
+    var steps = [
+      [priced > 0, 'Masukkan bahan baku dan perlengkapan beserta harganya', priced ? priced + ' bahan sudah berharga' : 'Cukup harga dari struk atau supplier, tanpa harus belanja dulu', '<button type="button" class="btn" data-act="new-ing">Tambah bahan</button>'],
+      [full > 0, 'Susun resep menu', 'Bahan yang belum ada bisa ditambah langsung dari resep', '<a class="btn" href="#menu">Buka menu</a>'],
+      [!!sold, 'Isi harga jual tiap menu', 'Untuk melihat margin dan food cost', '<a class="btn" href="#menu">Isi harga</a>']
+    ];
+    var doneN = steps.filter(function (x) { return x[0]; }).length;
+    var setup = doneN === steps.length ? '' : '<div class="group setup"><h2>Langkah awal <span class="hint">' + doneN + ' dari ' + steps.length + ' selesai</span></h2><ol class="steps">' +
+      steps.map(function (x, k) {
+        return '<li class="' + (x[0] ? 'done' : '') + '"><span class="num" aria-hidden="true">' + (x[0] ? '&#10003;' : k + 1) + '</span><div><b>' + x[1] + '</b><span class="hint">' + (x[0] ? 'Selesai. ' : '') + x[2] + '</span></div>' + (x[0] ? '' : x[3]) + '</li>';
+      }).join('') + '</ol></div>';
+    view.innerHTML = '<section aria-labelledby="h-dash">' + hero + quick + setup + '<div class="dash"><div class="col">' +
       '<div class="group"><h2>Perlu tindakan</h2>' + (acts.length ? '<ul class="tick">' + acts.join('') + '</ul>' : '<div class="empty"><p>Tidak ada yang perlu ditindak saat ini.</p></div>') + '</div>' +
       (CC.checklistGroupHTML ? CC.checklistGroupHTML() : '') + '</div><div class="col">' +
       '<div class="group"><h2>Hari ini</h2><div class="struk">' + todayRows + '</div></div>' +

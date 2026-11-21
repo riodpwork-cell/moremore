@@ -151,7 +151,7 @@
     return t;
   }
   function tripRowHTML(l, i) {
-    var opts = rawIngs().map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === l.ingId ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('');
+    var opts = CC.ingOptionsHTML(rawIngs(), l.ingId || '', true);
     var ing = CC.ingById(l.ingId), units = ing ? CC.unitOptions(ing) : [l.unit];
     var uo = units.map(function (u) { return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + esc(CC.unitLabel(ing, u)) + '</option>'; }).join('');
     return '<div class="trow"><div class="field full"><label for="tp-ing-' + i + '">Bahan</label><select id="tp-ing-' + i + '" data-tl="ing" data-i="' + i + '">' + opts + '</select></div>' +
@@ -167,20 +167,21 @@
     $('#tp-total', dlg).textContent = 'Total belanja ' + rp(tripTotal());
     if (focusId) { var f = $('#' + focusId, dlg); if (f) f.focus(); }
   }
-  function openTrip() {
-    if (!rawIngs().length) { toast('Isi bahan mentah di Bank of Goods dulu.'); return; }
-    draft = { date: today(), store: '', lines: [newLine()] };
+  function buyUnit(ing) { var uo = CC.unitOptions(ing); return ing.packSize > 0 || ing.base === 'pcs' ? 'pcs' : uo[uo.length > 1 ? 1 : 0]; }
+  /* keep: buka lagi draf yang sama, dipakai setelah menambah bahan baru dari tengah belanja */
+  function openTrip(keep) {
+    if (!keep || !draft) draft = { date: today(), store: '', lines: [newLine()] };
     var stores = {};
     S().trips.forEach(function (t) { if (t.store) stores[t.store] = 1; });
     openDlg(dlgHead('Catat belanja') + '<form id="f-trip" novalidate>' +
       '<div class="grid2"><div class="field"><label for="tp-date">Tanggal belanja</label><input id="tp-date" type="date" value="' + draft.date + '"></div>' +
-      '<div class="field"><label for="tp-store">Toko atau supplier, opsional</label><input id="tp-store" type="text" list="tp-stores" autocomplete="off"></div></div>' +
+      '<div class="field"><label for="tp-store">Toko atau supplier, opsional</label><input id="tp-store" type="text" list="tp-stores" autocomplete="off" value="' + esc(draft.store || '') + '"></div></div>' +
       '<datalist id="tp-stores">' + Object.keys(stores).map(function (s) { return '<option value="' + esc(s) + '">'; }).join('') + '</datalist>' +
       '<div id="tp-lines"></div>' +
       '<div><button type="button" class="btn" data-act="tp-add">Tambah bahan</button></div>' +
       '<p class="hint" style="font-weight:600" id="tp-total"></p><p class="err" id="tp-err" role="alert"></p>' +
       '<div class="actions"><button type="button" class="btn" data-act="close">Batal</button><button type="submit" class="btn primary">Simpan belanja</button></div></form>');
-    renderTripLines('tp-qty-0');
+    renderTripLines(keep ? keep : (draft.lines[0].ingId ? 'tp-qty-0' : 'tp-ing-0'));
   }
   /* dipakai form belanja dan Asisten: baris sudah divalidasi pemanggil */
   CC.recordTrip = function (date, store, lines, via) {
@@ -202,7 +203,7 @@
     if (!draft.date) { err.textContent = 'Pilih tanggal belanja.'; return; }
     for (var i = 0; i < draft.lines.length; i++) {
       var l = draft.lines[i], ing = CC.ingById(l.ingId);
-      if (!ing) { err.textContent = 'Baris ' + (i + 1) + ': pilih bahan.'; return; }
+      if (!ing) { err.textContent = 'Baris ' + (i + 1) + ': pilih bahan.'; $('#tp-ing-' + i, dlg).focus(); return; }
       if (!(l.qty > 0)) { err.textContent = 'Baris ' + (i + 1) + ': isi jumlah yang lebih dari 0.'; $('#tp-qty-' + i, dlg).focus(); return; }
       if (l.price == null || !(l.price >= 0)) { err.textContent = 'Baris ' + (i + 1) + ': isi harga total.'; $('#tp-price-' + i, dlg).focus(); return; }
       if (CC.toBase(ing, l.qty, l.unit) == null) { err.textContent = 'Baris ' + (i + 1) + ': satuan tidak cocok dengan bahan.'; return; }
@@ -259,7 +260,7 @@
     var stuck = [];
     t.lines.forEach(function (l) {
       var ing = CC.ingById(l.ingId); if (!ing) return;
-      if (ing.purchases.filter(function (p) { return p.tripId !== id; }).length === 0 && stuck.indexOf(ing.name) < 0) stuck.push(ing.name);
+      if (ing.purchases.filter(function (p) { return p.tripId !== id; }).length === 0 && CC.refPerBase(ing) == null && stuck.indexOf(ing.name) < 0) stuck.push(ing.name);
     });
     if (stuck.length) { CC.openConfirm('Belanja tidak bisa dihapus', 'Bahan ' + esc(stuck.join(', ')) + ' hanya punya pembelian dari belanja ini. Tambahkan pembelian lain dulu supaya harganya tetap ada.', 'close', {}, 'Mengerti'); return; }
     CC.openConfirm('Hapus belanja?', 'Belanja ' + esc(fmtDate(t.date)) + ' dihapus. Harga bahan kembali ke pembelian sebelumnya dan stoknya berkurang.', 'trip-del-ok', { id: id }, 'Hapus belanja');
@@ -407,7 +408,7 @@
   document.addEventListener('click', function (e) {
     var t = e.target.closest('[data-act]'); if (!t || t.disabled) return;
     var a = t.getAttribute('data-act'), id = t.getAttribute('data-id');
-    if (a === 'trip-new') openTrip();
+    if (a === 'trip-new') openTrip(false);
     else if (a === 'tp-add') { draft.lines.push(newLine()); renderTripLines('tp-ing-' + (draft.lines.length - 1)); }
     else if (a === 'tp-rm') { draft.lines.splice(parseInt(t.getAttribute('data-i'), 10), 1); renderTripLines('tp-date'); }
     else if (a === 'trip-del') delTrip(id);
@@ -447,9 +448,16 @@
     if (t.id === 'tp-date' && draft) { draft.date = t.value; draft.lines.forEach(function (l, i) { var p = $('#tp-prev-' + i, dlg); if (p) p.textContent = prevText(l); }); return; }
     var k = t.getAttribute('data-tl'); if (!k || !draft) return;
     var i = parseInt(t.getAttribute('data-i'), 10), l = draft.lines[i]; if (!l) return;
+    if (k === 'ing' && t.value === '__new') {
+      draft.store = ($('#tp-store', dlg).value || ''); t.value = l.ingId || '';
+      CC.openNewIng({ fromTrip: true,
+        onSaved: function (ni) { l.ingId = ni.id; l.unit = buyUnit(ni); openTrip('tp-qty-' + i); },
+        onCancel: function () { openTrip('tp-ing-' + i); } });
+      return;
+    }
     if (k === 'ing') {
-      l.ingId = t.value; var ing = CC.ingById(l.ingId), uo = CC.unitOptions(ing);
-      if (uo.indexOf(l.unit) < 0) l.unit = uo[uo.length > 1 ? 1 : 0];
+      l.ingId = t.value; var ing = CC.ingById(l.ingId);
+      if (CC.unitOptions(ing).indexOf(l.unit) < 0 || ing.packSize > 0) l.unit = buyUnit(ing);
       renderTripLines('tp-ing-' + i);
     } else if (k === 'unit') { l.unit = t.value; $('#tp-prev-' + i, dlg).textContent = prevText(l); }
   });

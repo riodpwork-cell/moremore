@@ -69,7 +69,9 @@
 
   /* ---------- bahan ---------- */
   reg('bahan_buat', false, function (a, errors, dry) {
-    var name = txt(a.name, 60), base = a.base, minStock = numv(a.minStock), density = numv(a.density), pack = numv(a.packSize);
+    var kind = a.kind === 'perlengkapan' ? 'perlengkapan' : 'bahan';
+    var name = txt(a.name, 60), base = kind === 'perlengkapan' ? 'pcs' : a.base, minStock = numv(a.minStock), density = numv(a.density), pack = numv(a.packSize);
+    if (a.kind != null && a.kind !== 'bahan' && a.kind !== 'perlengkapan') errors.push('kind harus bahan atau perlengkapan.');
     if (pack != null && !(pack > 0)) errors.push('packSize harus lebih dari 0.');
     if (pack > 0 && base === 'pcs') errors.push('packSize hanya untuk bahan g atau ml.');
     if (!name) errors.push('Nama bahan kosong.');
@@ -77,9 +79,16 @@
     if (!FAM[base]) errors.push('base harus g, ml, atau pcs.');
     if (minStock != null && minStock < 0) errors.push('minStock tidak boleh negatif.');
     if (density != null && !(density > 0)) errors.push('density harus lebih dari 0.');
+    var ing = { id: uid('i'), name: name, kind: kind, base: base, density: density > 0 ? density : null, purchases: [], minStock: minStock > 0 ? minStock : 0, packSize: pack > 0 ? pack : null, refPrice: null };
+    if (a.refPrice != null) {
+      var r = a.refPrice || {}, rq = numv(r.qty), rpv = numv(r.price);
+      if (!(rq > 0) || !(rpv >= 0) || !UNITS[r.unit]) errors.push('refPrice harus {qty, unit, price}.');
+      else if (FAM[base] && CC.toBase(ing, rq, r.unit) == null) errors.push('refPrice: satuan tidak cocok dengan bahan.');
+      else ing.refPrice = { qty: rq, unit: r.unit, price: rpv, date: today() };
+    }
     if (errors.length || dry) return;
-    S().ingredients.push({ id: uid('i'), name: name, base: base, density: density > 0 ? density : null, purchases: [], minStock: minStock > 0 ? minStock : 0, packSize: pack > 0 ? pack : null });
-    return 'Bahan ' + name + ' dibuat di Bank of Goods (satuan dasar ' + UNITS[base].label + '). Harga baru ada setelah belanja dicatat.';
+    S().ingredients.push(ing);
+    return (kind === 'perlengkapan' ? 'Perlengkapan ' : 'Bahan ') + name + ' dibuat di Bank of Goods (satuan dasar ' + UNITS[base].label + '). ' + (ing.refPrice ? 'Harga acuan ' + rp(ing.refPrice.price) + ' per ' + ing.refPrice.qty + ' ' + CC.unitLabel(ing, ing.refPrice.unit) + ', belum menambah stok.' : 'Harga baru ada setelah belanja atau harga acuan diisi.');
   });
   reg('bahan_ubah', false, function (a, errors, dry) {
     var ing = ingRef(a); if (!ing) { errors.push('Bahan tidak ditemukan.'); return; }
@@ -311,7 +320,7 @@
     if (k === 'belanja') {
       var t = st.trips.filter(function (x) { return x.id === id; })[0]; if (!t) { errors.push('Belanja tidak ditemukan.'); return; }
       var stuck = [];
-      t.lines.forEach(function (l) { var g = CC.ingById(l.ingId); if (g && !g.purchases.some(function (p) { return p.tripId !== id; }) && stuck.indexOf(g.name) < 0) stuck.push(g.name); });
+      t.lines.forEach(function (l) { var g = CC.ingById(l.ingId); if (g && !g.purchases.some(function (p) { return p.tripId !== id; }) && CC.refPerBase(g) == null && stuck.indexOf(g.name) < 0) stuck.push(g.name); });
       if (stuck.length) { errors.push('Bahan ' + stuck.join(', ') + ' hanya punya pembelian dari belanja ini. Catat belanja lain dulu supaya harganya tetap ada.'); return; }
       if (dry) return;
       st.ingredients.forEach(function (i) { i.purchases = i.purchases.filter(function (p) { return p.tripId !== id; }); });
