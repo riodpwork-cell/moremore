@@ -4,27 +4,33 @@
 <meta name="robots" content="noindex,nofollow">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Coffee Cost</title>
+<title>Coffee Cost · More</title>
+<meta name="theme-color" content="#F2ECDD" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121210" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="brand/favicon.png">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Schibsted+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <style>
-/* Arah: struk dapur. Satu motif berulang (garis titik-titik penuntun antara label dan angka)
-   karena seluruh alur kerja ini berakhir di kertas dan struk. Aksen tunggal: merah cranberry,
-   diambil dari menu Americano Berry. Dial: ENERGY 1, RHYTHM 2, MOTION 1. */
+/* Arah: identitas More. Kertas krem dan tinta hitam dari lembar karakter, hijau More sebagai
+   satu-satunya aksen (dipakai versi lebih gelap untuk teks dan tombol supaya lolos AA), lockup
+   "more + burung" di kepala, burung lari sebagai maskot di layar kosong. Motif struk (garis
+   titik-titik penuntun) tetap, karena alurnya berakhir di kertas. Dial: ENERGY 2, RHYTHM 2, MOTION 1. */
 :root {
-  --bg: #F4F5F2;
-  --surface: #FFFFFF;
-  --ink: #1D2321;
-  --ink-2: #4D5753;
-  --line: #D9DDD8;
-  --line-strong: #8E9892;
-  --accent: #9E1B3C;
+  --bg: #F2ECDD;
+  --surface: #FBF8F1;
+  --ink: #191917;
+  --ink-2: #57534A;
+  --line: #DED6C3;
+  --line-strong: #8A826E;
+  --brand: #6E9350;
+  --accent: #46672E;
   --accent-ink: #FFFFFF;
-  --accent-soft: #F6E3E8;
-  --ok: #1F6B45;
-  --warn: #7A4F00;
-  --warn-soft: #F8EDD3;
+  --accent-soft: #E2EAD3;
+  --ok: #2F6B2A;
+  --warn: #8A4512;
+  --warn-soft: #F6E0CF;
   --bad: #A12622;
   --font-display: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
   --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
@@ -33,16 +39,16 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #121614; --surface: #1A1F1C; --ink: #E8ECE9; --ink-2: #A9B3AD;
-    --line: #2F3733; --line-strong: #6F7B74; --accent: #F07A97; --accent-ink: #1A0A10;
-    --accent-soft: #3A1B25; --ok: #5FCB92; --warn: #E3B04B; --warn-soft: #33290F; --bad: #FF8F88;
+    --bg: #121210; --surface: #1C1C19; --ink: #F0EADB; --ink-2: #B7B09F;
+    --line: #34332D; --line-strong: #7A7363; --brand: #8DB46B; --accent: #A8CF86; --accent-ink: #142008;
+    --accent-soft: #27321D; --ok: #95D08A; --warn: #F2A877; --warn-soft: #3A2618; --bad: #FF8F88;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #121614; --surface: #1A1F1C; --ink: #E8ECE9; --ink-2: #A9B3AD;
-  --line: #2F3733; --line-strong: #6F7B74; --accent: #F07A97; --accent-ink: #1A0A10;
-  --accent-soft: #3A1B25; --ok: #5FCB92; --warn: #E3B04B; --warn-soft: #33290F; --bad: #FF8F88;
+  --bg: #121210; --surface: #1C1C19; --ink: #F0EADB; --ink-2: #B7B09F;
+  --line: #34332D; --line-strong: #7A7363; --brand: #8DB46B; --accent: #A8CF86; --accent-ink: #142008;
+  --accent-soft: #27321D; --ok: #95D08A; --warn: #F2A877; --warn-soft: #3A2618; --bad: #FF8F88;
   color-scheme: dark;
 }
 
@@ -356,13 +362,54 @@ summary { cursor: pointer; min-height: 44px; display: flex; align-items: center;
 .strip.slim > span { flex: 1 1 auto; }
 .strip.slim .btn { flex: none; }
 .empty .btn { margin-top: 2px; }
+
+/* identitas More: lockup, slogan, maskot */
+.wordmark { display: flex; align-items: center; gap: 10px; }
+.wm { display: block; height: 40px; width: auto; }
+.wm-d { display: none !important; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wm-l { display: none !important; } :root:not([data-theme="light"]) .wm-d { display: block !important; } }
+:root[data-theme="dark"] .wm-l { display: none !important; }
+:root[data-theme="dark"] .wm-d { display: block !important; }
+.appname { font-family: var(--font-display); font-weight: 700; font-size: .9375rem; color: var(--ink-2); padding-left: 10px; border-left: 1px solid var(--line-strong); white-space: nowrap; }
+.slogan { display: none; }
+@media (min-width: 900px) {
+  .wordmark { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .wm { height: auto; width: 140px; }
+  .rail { gap: 18px; padding-top: 22px; }
+  .appname { padding-left: 0; border-left: 0; font-size: 1.0625rem; color: var(--ink); }
+  .slogan { display: block; margin-top: auto; padding: 0 8px; }
+  .slogan img { width: 132px; height: auto; opacity: .9; }
+  .rail .actions-r { margin-top: 0; }
+  .rail { overflow-y: auto; }
+}
+@media (min-width: 900px) and (max-height: 979px) { .slogan { display: none; } .rail .actions-r { margin-top: auto; } }
+@media (max-width: 559px) { .appname { display: none; } .wm { height: 36px; } }
+.rail { background: var(--surface); }
+.nav a[aria-current="page"], .nav .navmore[aria-current="true"] { color: var(--accent); }
+.nav a[aria-current="page"]::before { background: var(--brand); }
+.btn { border-radius: 10px; }
+.btn.primary:hover { background: var(--ink); border-color: var(--ink); box-shadow: none; color: var(--bg); }
+.rows, .sec, .struk, .tbl-wrap, .strip, .empty, dialog, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], select, textarea { border-radius: 10px; }
+.struk { border-top: 6px solid var(--brand); }
+.leader.total b, .minibar b { color: var(--accent); }
+.bars span { background: var(--brand); }
+h1 { letter-spacing: -.01em; }
+/* maskot: burung "selalu penasaran, mencari lebih banyak hal baik" di setiap layar kosong */
+.empty { position: relative; }
+.empty::before {
+  content: ""; display: block; width: 68px; height: 55px;
+  background: url("brand/bird-run.png") no-repeat left center / contain;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .empty::before { filter: invert(.93) sepia(.15); } }
+:root[data-theme="dark"] .empty::before { filter: invert(.93) sepia(.15); }
 </style>
 </head>
 <body>
 <div class="shell">
   <aside class="rail">
-    <div class="brand"><span class="wordmark">Coffee Cost</span><span class="sub">Back office central kitchen</span><span id="syncst" class="syncst" role="status" aria-live="polite"></span></div>
+    <div class="brand"><span class="wordmark"><img class="wm wm-l" src="brand/lockup-green.png" width="640" height="248" alt="More"><img class="wm wm-d" src="brand/lockup-cream.png" width="640" height="248" alt="" aria-hidden="true"><span class="appname">Coffee Cost</span></span><span class="sub">Back office central kitchen</span><span id="syncst" class="syncst" role="status" aria-live="polite"></span></div>
     <nav class="nav" id="nav" aria-label="Menu utama"></nav>
+    <div class="slogan" aria-hidden="true"><img class="wm-l" src="brand/slogan-green.png" width="360" height="346" alt="" loading="lazy"><img class="wm-d" src="brand/slogan-cream.png" width="360" height="346" alt="" loading="lazy"></div>
     <div class="actions-r"><span id="saved" class="saved" role="status" aria-live="polite"></span>
     <button type="button" class="btn slim" data-act="backup"><span class="t-long">Data dan cadangan</span><span class="t-short">Cadangan</span></button></div>
   </aside>
