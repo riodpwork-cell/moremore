@@ -108,3 +108,35 @@ Tanggal: `YYYY-MM-DD`. Rupiah: angka utuh. Satuan: `g`, `kg`, `ml`, `l`, `pcs`. 
 ```
 
 `kind` adalah `bahan` atau `menu`. Satu item per baris. Cart tidak bisa dihapus lewat antrean. Ditolak bila bahan atau menu sudah dipakai di menu atau resep, atau sudah punya catatan belanja, produksi, pengiriman, atau rekap.
+
+### Aksi lanjutan (agen bisa hampir semua yang bisa dilakukan menu aplikasi)
+
+Semua jenis di bawah memakai aturan antrean yang sama: dicek dulu, ditolak utuh bila ada yang salah, diterapkan sekali. Bahan, menu, homemade, batch, dan cart boleh dirujuk dengan `ingId` / `menuId` / `hmId` / `batchId` / `cartId`, atau dengan `name` yang persis sama (huruf besar kecil diabaikan). `lines` pada `homemade_ubah` dan `menu_ubah` mengganti seluruh resep, bukan menambah.
+
+| kind | payload | catatan |
+|---|---|---|
+| `bahan_buat` | `{name, base: g\|ml\|pcs, minStock?, density?}` | nama tidak boleh kembar |
+| `bahan_ubah` | `{ingId\|name, newName?, minStock?, density?}` | nama bahan homemade diubah lewat `homemade_ubah` |
+| `homemade_buat` | `{name, base: g\|ml, yieldQty, note?, density?, lines: [{ingId\|name, qty, unit, newBase?}]}` | `yieldQty` = hasil jadi per resep dalam satuan dasar. Bahan baru dibuat otomatis bila `newBase` dikirim. Resep boleh memakai homemade lain |
+| `homemade_ubah` | `{hmId\|name, newName?, yieldQty?, note?, density?, lines?}` | siklus (resep memakai dirinya sendiri) ditolak |
+| `menu_buat` | `{name, price?, targetMargin?, loss?, shelfDays?, lines: [{section: rtd\|cart, ingId\|name, qty, unit, newBase?}]}` | `targetMargin` dan `loss` dalam persen |
+| `menu_ubah` | `{menuId\|name, newName?, price?, targetMargin?, loss?, shelfDays?, lines?}` | |
+| `stok_opname` | `{date, items: [{ingId\|name, counted, unit}]}` | `counted` = hasil hitung fisik. Aplikasi menghitung selisih dari saldo |
+| `produksi` | `{date, menuId\|name, cups, expiry?, code?, note?}` | `expiry` default dari `shelfDays` menu, `code` dibuat otomatis, kode kembar ditolak |
+| `pengiriman` | `{date, cartId?, type: awal\|tambahan, time?: "HH:MM", note?, lines: [{menuId\|name, qty}]}` | ditolak bila stok central tidak cukup |
+| `pembuangan` | `{date, batchId\|batchCode, qty, reason: Expired\|Rusak\|Tumpah\|Lainnya}` | `qty` tidak boleh melebihi sisa batch |
+| `cart_buat` | `{name, openingCash?}` | |
+| `pengingat_selesai` | `{id}` | |
+| `hapus` | `{kind, id\|name}` | `kind`: `bahan`, `menu`, `homemade`, `belanja`, `koreksi`, `pengingat`, `rekap`, `pengiriman`, `pembuangan`, `cart` |
+
+Batasan `hapus`: bahan yang dipakai resep homemade, bahan hasil masak, menu yang sudah punya catatan produksi, pengiriman, pembuangan, atau rekap, cart terakhir, menu terakhir, dan belanja yang menjadi satu-satunya sumber harga sebuah bahan ditolak dengan alasan. Hapus batch produksi belum didukung lewat antrean.
+
+Contoh membuat bahan homemade:
+
+```json
+{"name": "Sirup Gula Aren", "base": "ml", "yieldQty": 600, "note": "masak 20 menit",
+ "lines": [{"name": "Gula Aren", "qty": 300, "unit": "g", "newBase": "g"},
+           {"ingId": "inakvjl32y", "qty": 400, "unit": "ml"}]}
+```
+
+Harga homemade dihitung otomatis dari harga bahan di resepnya, jadi `summary` akan menyebut bahan yang belum punya harga. Catat dulu `belanja` untuk bahan itu.

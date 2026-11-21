@@ -527,11 +527,13 @@
 
   /* jalur untuk antrean agen (inbox.js). Memeriksa lebih ketat dari kartu Asisten: tanggal tidak boleh asal atau janggal. */
   var KINDS = ['belanja', 'masak', 'rekap', 'pengingat', 'hapus_contoh'];
+  CC.agentKinds = CC.agentKinds || {};
   CC.agentApply = function (kind, payload, opts) {
     opts = opts || {};
-    if (KINDS.indexOf(kind) < 0) return { ok: false, error: 'Jenis aksi tidak dikenal: ' + kind + '.' };
+    var X = CC.agentKinds[kind];
+    if (KINDS.indexOf(kind) < 0 && !X) return { ok: false, error: 'Jenis aksi tidak dikenal: ' + kind + '.' };
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { ok: false, error: 'Payload bukan objek.' };
-    var a = {}; Object.keys(payload).forEach(function (k) { a[k] = payload[k]; }); a.type = kind;
+    var a = {}; Object.keys(payload).forEach(function (k) { a[k] = payload[k]; }); if (!X) a.type = kind;
     var t = today(), lo = CC.addDays(t, -400), hi = CC.addDays(t, 1), bad = null;
     ['date', 'due'].forEach(function (k) {
       if (a[k] === undefined || a[k] === null || a[k] === '') return;
@@ -540,6 +542,10 @@
       else if (k === 'date' && (d > hi || d < lo)) bad = 'Tanggal ' + d + ' janggal (terlalu jauh dari hari ini).';
     });
     if (bad) return { ok: false, error: bad };
+    if (X) {
+      if (X.needDate && !a.date) return { ok: false, error: 'Tanggal wajib diisi.' };
+      try { return X.run(a, opts); } catch (e) { return { ok: false, error: 'Gagal menerapkan: ' + (e && e.message ? e.message : 'galat') }; }
+    }
     if (kind !== 'pengingat' && kind !== 'hapus_contoh' && !a.date) return { ok: false, error: 'Tanggal wajib diisi.' };
     var v = sanitize(a);
     if (v.errors.length) return { ok: false, error: v.errors.join(' ') };

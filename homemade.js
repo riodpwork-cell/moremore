@@ -147,6 +147,7 @@
     toast('Bahan "' + name + '" dibuat dan masuk ke Bank of Goods.');
   }
 
+  CC.hmCandidates = candidates;
   CC.addRoute('homemade', { label: 'Bahan homemade', order: 55, primary: false, render: render });
 
   document.addEventListener('click', function (e) {

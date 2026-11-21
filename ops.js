@@ -105,6 +105,7 @@
   function batchCode(b) { var x = S().batches.filter(function (y) { return y.id === b; })[0]; return x ? x.code : '?'; }
   CC.simulate = simulate; CC.centralByMenu = centralByMenu; CC.cartName = cartName; CC.menuName = menuName;
   CC.batchCode = batchCode;
+  CC.genCode = function (d, m) { return genCode(d, m); };
   CC.gotoRecap = function (date, cart) {
     CC.ui.recapDate = date; CC.ui.recapCart = cart;
     if (location.hash === '#rekap') CC.render(true); else location.hash = '#rekap';
