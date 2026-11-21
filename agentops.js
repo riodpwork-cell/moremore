@@ -95,15 +95,27 @@
   });
 
   /* ---------- homemade ---------- */
+  /* ratios: {cair, kental, thick} dalam desimal (0,9 = 90%) atau persen (90). */
+  function readRatios(r, errors) {
+    if (r === undefined) return undefined;
+    if (!r || typeof r !== 'object' || Array.isArray(r)) { errors.push('ratios harus objek {cair, kental, thick}.'); return undefined; }
+    var out = {};
+    ['cair', 'kental', 'thick'].forEach(function (k) {
+      if (r[k] === undefined || r[k] === null || r[k] === '') return;
+      var v = numv(r[k]); if (v > 1.5) v = v / 100;
+      if (!(v > 0 && v <= 1.5)) errors.push('ratios.' + k + ' tidak wajar.'); else out[k] = Math.round(v * 1000) / 1000;
+    });
+    return out;
+  }
   reg('homemade_buat', false, function (a, errors, dry) {
     var name = txt(a.name, 60), base = a.base, yq = numv(a.yieldQty), note = txt(a.note, 200), density = numv(a.density);
     if (!name) errors.push('Nama kosong.'); else if (nameTaken(name)) errors.push('Sudah ada bahan bernama ' + name + ' di Bank of Goods.');
     if (base !== 'g' && base !== 'ml') errors.push('base homemade harus g atau ml.');
     if (!(yq > 0)) errors.push('yieldQty (hasil jadi dalam satuan dasar) harus lebih dari 0.');
-    var rl = resolveLines(a.lines, errors);
+    var rl = resolveLines(a.lines, errors), ratios = readRatios(a.ratios, errors);
     if (errors.length || dry) return;
     var made = makeNews(rl.news), hid = uid('h'), iid = uid('i');
-    var hm = { id: hid, name: name, base: base, yieldQty: yq, density: density > 0 ? density : null, note: note, ingId: iid, lines: rl.items.map(function (it) { return { id: uid('hl'), ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; }) };
+    var hm = { id: hid, name: name, base: base, yieldQty: yq, density: density > 0 ? density : null, note: note, ingId: iid, ratios: ratios || {}, lines: rl.items.map(function (it) { return { id: uid('hl'), ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; }) };
     S().homemades.push(hm);
     S().ingredients.push({ id: iid, name: name, base: base, density: hm.density, purchases: [], homemadeId: hid });
     return 'Bahan homemade ' + name + ' dibuat: ' + rl.items.length + ' bahan, hasil jadi ' + yq + ' ' + UNITS[base].label + '.' + (rl.news.length ? ' Bahan baru: ' + rl.news.map(function (n) { return n.name; }).join(', ') + '.' : '') + noPrice(rl.items, made);
@@ -115,13 +127,15 @@
     if (yq !== undefined && !(yq > 0)) errors.push('yieldQty harus lebih dari 0.');
     if (density != null && !(density > 0)) errors.push('density harus lebih dari 0.');
     if (a.lines !== undefined) rl = resolveLines(a.lines, errors, { hm: hm });
-    if (nn == null && yq === undefined && density === undefined && a.note === undefined && !rl) errors.push('Tidak ada yang diubah (newName, yieldQty, density, note, lines).');
+    var ratios = readRatios(a.ratios, errors);
+    if (nn == null && yq === undefined && density === undefined && a.note === undefined && !rl && !ratios) errors.push('Tidak ada yang diubah (newName, yieldQty, density, note, lines, ratios).');
     if (errors.length || dry) return;
     var ch = [], ing = CC.ingById(hm.ingId);
     if (nn != null) { ch.push('nama menjadi ' + nn); hm.name = nn; if (ing) ing.name = nn; }
     if (yq !== undefined) { hm.yieldQty = yq; ch.push('hasil jadi ' + yq + ' ' + UNITS[hm.base].label); }
     if (density !== undefined) { hm.density = density > 0 ? density : null; if (ing) ing.density = hm.density; ch.push('densitas'); }
     if (a.note !== undefined) { hm.note = txt(a.note, 200); ch.push('catatan'); }
+    if (ratios) { hm.ratios = hm.ratios || {}; Object.keys(ratios).forEach(function (k) { hm.ratios[k] = ratios[k]; }); ch.push('rasio ' + Object.keys(ratios).map(function (k) { return k + ' ' + Math.round(ratios[k] * 1000) / 10 + '%'; }).join(', ')); }
     var made = {};
     if (rl) { made = makeNews(rl.news); hm.lines = rl.items.map(function (it) { return { id: uid('hl'), ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; }); ch.push('resep diganti (' + hm.lines.length + ' bahan)'); }
     return 'Homemade ' + hm.name + ' diubah: ' + ch.join(', ') + '.' + (rl ? noPrice(rl.items, made) : '');

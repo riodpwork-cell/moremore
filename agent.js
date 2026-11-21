@@ -170,6 +170,29 @@
       if (!hm) out.errors.push('Bahan homemade tidak ditemukan di Bahan homemade. Buat dulu resepnya di sana.');
       else if (!(hm.yieldQty > 0) || !hm.lines.length) out.errors.push('Resep ' + hm.name + ' belum lengkap (hasil jadi atau bahan masih kosong). Lengkapi di Bahan homemade.');
       if (!(out.qty > 0)) out.errors.push('Jumlah hasil jadi belum terbaca.');
+      out.level = a.level == null || a.level === '' ? 'kental' : String(a.level).toLowerCase();
+      if (['cair', 'kental', 'thick'].indexOf(out.level) < 0) out.errors.push('level harus cair, kental, atau thick.');
+      out.mode = 'cepat';
+      if (hm && a.lines !== undefined) {
+        /* lengkap: bahan harus sesuai resep. Tiap bahan resep wajib ada (qty 0 bila tidak dipakai). */
+        out.mode = 'lengkap'; out.amounts = {};
+        var given = Array.isArray(a.lines) ? a.lines : [];
+        if (!given.length) out.errors.push('lines kosong.');
+        var seen = {};
+        given.forEach(function (l, i) {
+          l = l || {};
+          var ing = l.ingId ? CC.ingById(l.ingId) : st.ingredients.filter(function (x) { return l.name && x.name.toLowerCase() === String(l.name).toLowerCase(); })[0];
+          var rl = ing ? hm.lines.filter(function (x) { return x.ingId === ing.id; })[0] : null;
+          if (!rl) { out.errors.push('Baris ' + (i + 1) + ': bahan tidak ada di resep ' + hm.name + '.'); return; }
+          var q = numv(l.qty), u = l.unit || rl.unit;
+          if (!(q >= 0)) { out.errors.push('Baris ' + (i + 1) + ': qty tidak terbaca.'); return; }
+          if (q === 0) { out.amounts[rl.id] = 0; seen[rl.id] = true; return; }
+          var b = CC.toBase(ing, q, u), per = CC.toBase(ing, 1, rl.unit);
+          if (b == null || !(per > 0)) { out.errors.push('Baris ' + (i + 1) + ': satuan tidak cocok dengan ' + ing.name + '.'); return; }
+          out.amounts[rl.id] = b / per; seen[rl.id] = true;
+        });
+        hm.lines.forEach(function (rl) { var ig = CC.ingById(rl.ingId); if (ig && !seen[rl.id]) out.errors.push('Bahan resep ' + ig.name + ' tidak dikirim (isi qty 0 bila tidak dipakai).'); });
+      }
     } else if (a.type === 'rekap') {
       var cart = st.carts.filter(function (c) { return c.id === a.cartId; })[0] || st.carts[0];
       out.date = isoOr(a.date, today()); out.cartId = cart.id;
@@ -496,9 +519,9 @@
       impact = rec.impact;
     } else if (a.type === 'masak') {
       var hm = CC.homemadeById(v.hmId);
-      var use = CC.usageForHm(hm, v.qty);
-      CC.recordCook(hm.id, v.date, v.qty, v.note, via);
-      summary = hm.name + ' +' + fq(hm.base, v.qty) + ' tersimpan (' + fmtDate(v.date) + ').\nBahan mentah berkurang: ' + use.map(function (u) { var ing = CC.ingById(u.ingId); return ing.name + ' ' + fq(ing.base, u.base); }).join(', ') + '.';
+      var rec = CC.recordCook(hm.id, v.date, v.qty, v.note, via, { mode: v.mode || 'cepat', level: v.level, amounts: v.amounts });
+      if (!rec) throw new Error('Bahan terpakai tidak bisa dihitung.');
+      summary = hm.name + ' +' + fq(hm.base, v.qty) + ' tersimpan (' + fmtDate(v.date) + ', ' + (rec.mode === 'lengkap' ? 'timbang lengkap' : 'cepat, ' + rec.level) + (rec.ratio ? ', rasio ' + nf2.format(Math.round(rec.ratio * 1000) / 10) + '%' : '') + ').\nBahan mentah berkurang: ' + rec.usage.map(function (u) { var ing = CC.ingById(u.ingId); return ing.name + ' ' + fq(ing.base, u.base); }).join(', ') + '.\nBiaya batch ' + rp(rec.cost) + (rec.qty > 0 ? ', Rp' + NB + nf2.format(Math.round(rec.cost / rec.qty * 100) / 100) + ' per ' + UNITS[hm.base].label : '') + '.';
     } else if (a.type === 'rekap') {
       var b2 = CC.recordRecap(v, via), c = b2.calc;
       summary = 'Rekap ' + fmtDate(v.date) + ' tersimpan. Omzet bersih ' + rp(c.net) + ', ' + nf0.format(c.cups) + ' cup.\n' +

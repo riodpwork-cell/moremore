@@ -83,6 +83,19 @@ Tanggal: `YYYY-MM-DD`. Rupiah: angka utuh. Satuan: `g`, `kg`, `ml`, `l`, `pcs`. 
 
 `qty` adalah hasil jadi dalam satuan dasar homemade, misalnya gram. Bahan yang terpakai dihitung aplikasi dari resep, jadi tidak dikirim. Resep homemade harus sudah lengkap.
 
+Catat masak punya dua cara:
+
+- **Cepat** (tanpa `lines`): cukup `qty` (berat jadi) dan `level` (`cair`, `kental`, atau `thick`, default `kental`). Bahan terpakai = `qty` dibagi rasio kekentalan homemade itu, lalu dibagi sesuai proporsi resep. Bila rasio kekentalan belum diisi, dipakai rasio resep (hasil jadi resep dibagi bahan resep).
+- **Lengkap** (dengan `lines`): gramasi sungguhan tiap bahan. Bahan harus sesuai resep, dan semua bahan resep wajib dikirim (isi `qty: 0` bila tidak dipakai). Stok bahan berkurang persis sesuai gramasi itu, dan rasio aktual disimpan. `level` di sini opsional, dipakai untuk kalibrasi rasio.
+
+```json
+{"date": "2026-11-21", "hmId": "<id>", "qty": 1400, "level": "kental"}
+{"date": "2026-11-21", "hmId": "<id>", "qty": 1300, "level": "kental",
+ "lines": [{"ingId": "<gula merah>", "qty": 900, "unit": "g"}, {"ingId": "<air>", "qty": 450, "unit": "g"}]}
+```
+
+Rasio kekentalan disimpan per homemade sebagai `ratios: {cair, kental, thick}` (desimal, 0,9 = 90%). Bisa diisi di halaman Bahan homemade atau lewat `homemade_buat` / `homemade_ubah` (`"ratios": {"cair": 0.97, "kental": 0.9, "thick": 0.84}`, angka di atas 1,5 dibaca sebagai persen). Halaman homemade menampilkan rata-rata rasio dari catatan masak lengkap per kekentalan, dengan tombol Pakai.
+
 **rekap**
 
 ```json
@@ -117,8 +130,8 @@ Semua jenis di bawah memakai aturan antrean yang sama: dicek dulu, ditolak utuh 
 |---|---|---|
 | `bahan_buat` | `{name, base: g\|ml\|pcs, minStock?, density?}` | nama tidak boleh kembar |
 | `bahan_ubah` | `{ingId\|name, newName?, minStock?, density?}` | nama bahan homemade diubah lewat `homemade_ubah` |
-| `homemade_buat` | `{name, base: g\|ml, yieldQty, note?, density?, lines: [{ingId\|name, qty, unit, newBase?}]}` | `yieldQty` = hasil jadi per resep dalam satuan dasar. Bahan baru dibuat otomatis bila `newBase` dikirim. Resep boleh memakai homemade lain |
-| `homemade_ubah` | `{hmId\|name, newName?, yieldQty?, note?, density?, lines?}` | siklus (resep memakai dirinya sendiri) ditolak |
+| `homemade_buat` | `{name, base: g\|ml, yieldQty, note?, density?, ratios?, lines: [{ingId\|name, qty, unit, newBase?}]}` | `yieldQty` = hasil jadi per resep dalam satuan dasar. Bahan baru dibuat otomatis bila `newBase` dikirim. Resep boleh memakai homemade lain |
+| `homemade_ubah` | `{hmId\|name, newName?, yieldQty?, note?, density?, ratios?, lines?}` | siklus (resep memakai dirinya sendiri) ditolak |
 | `menu_buat` | `{name, price?, targetMargin?, loss?, shelfDays?, lines: [{section: rtd\|cart, ingId\|name, qty, unit, newBase?}]}` | `targetMargin` dan `loss` dalam persen |
 | `menu_ubah` | `{menuId\|name, newName?, price?, targetMargin?, loss?, shelfDays?, lines?}` | |
 | `stok_opname` | `{date, items: [{ingId\|name, counted, unit}]}` | `counted` = hasil hitung fisik. Aplikasi menghitung selisih dari saldo |
