@@ -25,3 +25,86 @@ Buka alamat Pages di Safari, masuk lewat **Pengaturan**, bagian Sinkronisasi. Pi
 - Menu **Asisten** di dalam aplikasi hanya berfungsi bila dibuka lewat Claude. Di luar itu ia menampilkan pesan bahwa agen tidak tersedia. Agen yang sebenarnya adalah chat terpisah di Claude yang terhubung ke Supabase.
 - Data juga tersimpan di browser tiap perangkat (localStorage), jadi aplikasi tetap bisa dibuka saat offline. Sinkronisasi berjalan lagi saat koneksi kembali.
 - `config.js` berisi alamat project Supabase milikmu. Kalau repo dibuat publik, pahami bahwa alamat itu ikut terlihat.
+
+## Antrean agen (cc_inbox)
+
+Agen di chat Claude tidak menulis langsung ke data aplikasi. Ia memasukkan satu baris ke tabel `cc_inbox`, dan aplikasi yang memeriksa lalu menerapkannya.
+
+### Siapa boleh apa
+
+- Agen (lewat konektor Supabase): hanya `INSERT` ke `cc_inbox`, mengisi `kind` dan `payload`. Konektor berjalan dengan hak khusus dan tidak melewati RLS, jadi agen tidak butuh policy INSERT. Aturan "jangan UPDATE, DELETE, atau tulis ke `cc_docs`" adalah disiplin di prompt agen.
+- Aplikasi (akun yang login): `SELECT`, dan `UPDATE` hanya kolom `status`, `applied_at`, `error`, `summary`. Dibatasi di level kolom.
+- Pemicu database menjaga semuanya, juga untuk jalur konektor: `kind`, `payload`, `created_at` tidak bisa diubah, status hanya boleh `pending` ke `applied` atau `rejected` (final), dan baris tidak bisa dihapus.
+
+### Kapan antrean diproses
+
+- Tiap 6 detik selama aplikasi terbuka dan terlihat di salah satu perangkat, dan 2,5 detik setelah dibuka.
+- Hanya bila sinkronisasi berstatus "Tersinkron" dan tidak ada dialog atau kolom yang sedang diketik.
+- Paling banyak 10 baris per putaran, berurutan menurut `created_at`.
+- Bila aplikasi tertutup di semua perangkat, baris menunggu sebagai `pending`. Agen tidak bisa memaksa aplikasi memprosesnya.
+
+### Hasil di kolom status, error, summary
+
+| status | error | summary | arti |
+|---|---|---|---|
+| pending | kosong | kosong | belum diproses |
+| applied | kosong | terisi | berhasil diterapkan. summary berisi ringkasan (total, bahan baru, perubahan harga, hasil cek silang rekap) |
+| rejected | terisi | kosong | ditolak sebelum diterapkan. Tidak ada data yang berubah. Perbaiki lalu INSERT baris baru, jangan ubah baris lama |
+| applied | terisi | "Gagal diterapkan di aplikasi." | jarang terjadi. Anggap gagal dan periksa data |
+
+Penyebab `rejected` yang umum: tanggal bukan YYYY-MM-DD atau lebih dari 400 hari lalu atau lebih dari besok, satuan tidak cocok dengan bahan, jumlah atau harga tidak terbaca, id bahan, menu, atau homemade tidak ditemukan, resep homemade belum lengkap, tidak ada angka rekap, teks pengingat kosong, jenis aksi tidak dikenal, atau hapus item yang masih dipakai.
+
+Data yang diterapkan lebih dulu masuk ke aplikasi, lalu terkirim ke `cc_docs` dalam beberapa detik. Untuk memastikan, agen bisa membaca `cc_docs` setelah status `applied`.
+
+### Tidak diterapkan dua kali
+
+Sebelum menerapkan, aplikasi mengklaim baris dengan `UPDATE ... WHERE id = ... AND status = 'pending'`. Hanya satu perangkat yang mendapat baris itu, dan pemicu database menolak perubahan status dari `applied` atau `rejected`. Perangkat lain yang melihat baris yang sama melewatinya. Jangan INSERT ulang baris yang masih `pending`.
+
+### Contoh payload per kind
+
+Tanggal: `YYYY-MM-DD`. Rupiah: angka utuh. Satuan: `g`, `kg`, `ml`, `l`, `pcs`. Semua id dibaca dari tabel `cc_docs` (`ingredients__0`, `menus__0`, `carts__0`, `homemades__0`). Field yang tidak dikenal diabaikan.
+
+**belanja**
+
+```json
+{"date": "2026-11-21", "store": "Pasar Pagi", "lines": [
+  {"ingId": "i1xfsxe32y", "qty": 1, "unit": "kg", "price": 310000},
+  {"name": "Susu UHT", "qty": 2, "unit": "l", "price": 36000, "newBase": "ml"}
+]}
+```
+
+`price` adalah harga total baris. Bahan yang sudah ada: pakai `ingId` (atau `name` yang persis sama). Bahan baru: tanpa `ingId`, wajib `name` dan `newBase` (`g`, `ml`, atau `pcs`). Satuan harus sekeluarga dengan satuan dasar bahan. Bahan homemade tidak bisa dibeli.
+
+**masak**
+
+```json
+{"date": "2026-11-21", "hmId": "<id homemade>", "qty": 500, "note": "batch pagi"}
+```
+
+`qty` adalah hasil jadi dalam satuan dasar homemade, misalnya gram. Bahan yang terpakai dihitung aplikasi dari resep, jadi tidak dikirim. Resep homemade harus sudah lengkap.
+
+**rekap**
+
+```json
+{"date": "2026-11-21", "cartId": "cvt1nmt32y", "opening": 100000, "cash": 250000, "qris": 50000,
+ "working": "turus 10, sisa 2",
+ "lines": [{"menuId": "m66omqp32y", "turus": 10, "sisa": 2, "reject": 0}]}
+```
+
+`opening` adalah saldo awal, `cash` adalah uang tunai di laci saat tutup (saldo akhir), `qris` adalah total QRIS hari itu. Angka yang tidak dikirim tidak mengubah rekap yang sudah ada untuk tanggal dan cart yang sama. Minimal satu angka harus ada.
+
+**pengingat**
+
+```json
+{"text": "Beli susu UHT", "due": "2026-11-22"}
+```
+
+`text` maksimal 140 huruf. `due` boleh dihilangkan.
+
+**hapus_contoh**
+
+```json
+{"kind": "bahan", "id": "<id bahan>"}
+```
+
+`kind` adalah `bahan` atau `menu`. Satu item per baris. Cart tidak bisa dihapus lewat antrean. Ditolak bila bahan atau menu sudah dipakai di menu atau resep, atau sudah punya catatan belanja, produksi, pengiriman, atau rekap.

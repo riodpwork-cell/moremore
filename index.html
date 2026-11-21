@@ -1024,6 +1024,7 @@ summary { cursor: pointer; min-height: 44px; display: flex; align-items: center;
     }
     else if (act === 'del-ing') {
       var ing2 = ingById(id), used = usedIn(id);
+      if (CC.openDeleteIng) { CC.openDeleteIng(id); return; }
       if (used.length) openConfirm('Bahan masih dipakai', 'Bahan "' + esc(ing2.name) + '" ada di menu ' + used.map(function (m) { return esc(m.name); }).join(', ') + '. Hapus barisnya dari menu dulu, baru bahan ini bisa dihapus.', 'close', {}, 'Mengerti');
       else openConfirm('Hapus bahan?', 'Bahan "' + esc(ing2.name) + '" dan seluruh riwayat pembeliannya akan dihapus. Ini tidak bisa dibatalkan.', 'del-ing-ok', { id: id }, 'Hapus bahan');
     }

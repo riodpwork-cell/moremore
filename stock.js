@@ -281,7 +281,7 @@
         '<div class="price"><b>' + fmtQty(i.base, x.balance) + '</b><span>' + (ppb != null && x.balance > 0 ? 'bernilai ' + rp(x.balance * ppb) : 'harga ' + (ppb != null ? rpS(ppb) + ' per ' + baseLbl(i.base) : 'belum ada')) + '</span></div></li>';
     }).join('');
     view.innerHTML = '<section aria-labelledby="h-stk"><div class="pagehead"><div><h1 id="h-stk" tabindex="-1">Stok bahan</h1>' +
-      '<p class="lede">Saldo dihitung otomatis: belanja dan hasil masak, dikurangi pemakaian produksi, masak homemade, dan turus di cart. Koreksi dengan stok opname.</p></div>' +
+      '<p class="lede">Saldo dihitung otomatis: belanja dan hasil masak, dikurangi pemakaian produksi, masak homemade, dan turus di cart. Koreksi dengan stok opname. Ketuk nama bahan untuk menyesuaikan stok satu bahan, mengatur minimum, atau menghapus bahan.</p></div>' +
       '<div class="acts" style="margin:0"><button type="button" class="btn" data-act="shop-copy">Salin daftar belanja</button><button type="button" class="btn primary" data-act="opname"' + (ids.length ? '' : ' disabled') + '>Stok opname</button></div></div>' +
       (ids.length ? '<div class="struk" style="margin-bottom:20px"><h2>Ringkasan</h2>' + leader('Nilai stok', rp(value)) + leader('Bahan menipis', nf2.format(low)) + leader('Bahan minus', nf2.format(minus)) +
         (minus ? '<p class="note warn"><strong>Ada saldo minus.</strong> Pemakaian tercatat lebih besar dari stok. Catat belanja yang belum diinput, atau koreksi lewat stok opname.</p>' : '') + '</div>' : '') +
@@ -289,7 +289,7 @@
   }
   function openStockDetail(id) {
     var i = CC.ingById(id), x = CC.ledger()[id]; if (!i || !x) return;
-    var s = statusOf(x), uo = CC.unitOptions(i);
+    var s = statusOf(x), uo = CC.unitOptions(i), adjs = S().stockAdj.filter(function (a) { return a.ingId === id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
     var dispUnit = i.base === 'pcs' ? 'pcs' : (i.base === 'g' ? 'kg' : 'l');
     var minShown = i.minStock > 0 ? i.minStock / UNITS[dispUnit].f : '';
     var mv = x.moves.slice(0, 12).map(function (m) {
@@ -308,8 +308,59 @@
       '<div class="field"><label for="mn-unit">Satuan</label><select id="mn-unit">' + uo.filter(function (u) { return UNITS[u].fam === (i.base === 'g' ? 'm' : i.base === 'ml' ? 'v' : 'p'); }).map(function (u) { return '<option value="' + u + '"' + (u === dispUnit ? ' selected' : '') + '>' + UNITS[u].label + '</option>'; }).join('') + '</select></div></div>' +
       '<span class="hint" id="mn-h">Bahan masuk daftar belanja saat saldo sama dengan atau di bawah minimum. Kosongkan untuk tanpa minimum.</span>' +
       '<div class="actions"><button type="submit" class="btn">Simpan minimum</button></div></form>' +
-      '<hr class="sep"><h3>Pergerakan terakhir</h3>' + (mv ? '<ul class="hist">' + mv + '</ul>' : '<p class="hint">Belum ada pergerakan.</p>'));
+      '<hr class="sep"><h3>Sesuaikan stok</h3>' +
+      '<form id="f-adj" data-id="' + esc(id) + '" novalidate><p class="hint" id="adj-h">Isi hasil hitung nyata. Saldo tercatat sekarang ' + fmtQty(i.base, x.balance) + '. Selisihnya dicatat sebagai koreksi, jadi catatan lain tidak berubah.</p>' +
+      '<div class="grid2"><div class="field"><label for="adj-q">Hasil hitung</label><input id="adj-q" type="number" inputmode="decimal" min="0" step="any" aria-describedby="adj-h"></div>' +
+      '<div class="field"><label for="adj-u">Satuan</label><select id="adj-u">' + uo.filter(function (u) { return UNITS[u].fam === (i.base === 'g' ? 'm' : i.base === 'ml' ? 'v' : 'p'); }).map(function (u) { return '<option value="' + u + '"' + (u === dispUnit ? ' selected' : '') + '>' + UNITS[u].label + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="field" style="max-width:220px"><label for="adj-date">Tanggal hitung</label><input id="adj-date" type="date" value="' + today() + '"></div>' +
+      '<p class="err" id="adj-err" role="alert"></p><div class="actions"><button type="submit" class="btn primary">Sesuaikan stok</button></div></form>' +
+      (adjs.length ? '<h3>Koreksi stok bahan ini</h3><ul class="hist">' + adjs.map(function (a) {
+        return '<li><span>' + esc(fmtDate(a.date)) + ': ' + (a.delta > 0 ? '+' : '') + fmtQty(i.base, a.delta) + ', hasil hitung ' + fmtQty(i.base, a.counted) + '</span>' +
+          '<button type="button" class="btn quiet" data-act="adj-del" data-id="' + esc(a.id) + '" data-ing="' + esc(id) + '" aria-label="Batalkan koreksi ' + esc(fmtDate(a.date)) + '">Batalkan</button></li>';
+      }).join('') + '</ul>' : '') +
+      '<hr class="sep"><h3>Pergerakan terakhir</h3>' + (mv ? '<ul class="hist">' + mv + '</ul>' : '<p class="hint">Belum ada pergerakan.</p>') +
+      '<hr class="sep"><div class="actions" style="justify-content:flex-start">' +
+      (i.homemadeId ? '<p class="hint">Bahan ini hasil masak. Hapus lewat halaman Bahan homemade.</p>' : '<button type="button" class="btn danger quiet" data-act="ing-del-open" data-id="' + esc(id) + '">Hapus bahan ini</button>') + '</div>');
   }
+  function submitAdj(f) {
+    var id = f.getAttribute('data-id'), ing = CC.ingById(id), err = $('#adj-err', dlg), L = CC.ledger();
+    if (!ing) return;
+    var q = num($('#adj-q', dlg).value), u = $('#adj-u', dlg).value, date = $('#adj-date', dlg).value;
+    if (!date) { err.textContent = 'Pilih tanggal hitung.'; return; }
+    if (q == null || q < 0) { err.textContent = 'Isi hasil hitung, 0 atau lebih.'; $('#adj-q', dlg).focus(); return; }
+    var b = CC.toBase(ing, q, u); if (b == null) { err.textContent = 'Satuan tidak cocok dengan bahan.'; return; }
+    var delta = b - L[id].balance;
+    if (Math.abs(delta) < 1e-9) { err.textContent = 'Sudah sama dengan saldo tercatat, tidak ada yang disesuaikan.'; return; }
+    S().stockAdj.push({ id: uid('a'), date: date, ingId: id, counted: b, delta: delta });
+    CC.save(); CC.render(); openStockDetail(id); toast('Stok ' + ing.name + ' disesuaikan.');
+  }
+
+  /* hapus bahan beserta jejaknya: baris di resep menu, belanja, dan koreksi stok */
+  function openDeleteIng(id) {
+    var st = S(), ing = CC.ingById(id); if (!ing) return;
+    if (ing.homemadeId) { CC.openConfirm('Bahan hasil masak', 'Hapus lewat halaman Bahan homemade, bukan dari sini.', 'close', {}, 'Mengerti'); return; }
+    var hmUse = (st.homemades || []).filter(function (h) { return h.lines.some(function (l) { return l.ingId === id; }); });
+    if (hmUse.length) { CC.openConfirm('Bahan masih dipakai homemade', 'Bahan ' + esc(ing.name) + ' ada di resep ' + hmUse.map(function (h) { return esc(h.name); }).join(', ') + '. Hapus barisnya dari resep homemade itu dulu.', 'close', {}, 'Mengerti'); return; }
+    var menus = st.menus.filter(function (m) { return m.lines.some(function (l) { return l.ingId === id; }); });
+    var trips = st.trips.filter(function (t) { return t.lines.some(function (l) { return l.ingId === id; }); });
+    var adjs = st.stockAdj.filter(function (a) { return a.ingId === id; });
+    var parts = [];
+    if (menus.length) parts.push('baris bahan ini di resep menu ' + menus.map(function (m) { return esc(m.name); }).join(', '));
+    if (trips.length) parts.push(trips.length + ' catatan belanja (baris bahan ini)');
+    if (adjs.length) parts.push(adjs.length + ' koreksi stok');
+    if (ing.purchases.length) parts.push(ing.purchases.length + ' riwayat harga beli');
+    CC.openConfirm('Hapus bahan ' + esc(ing.name) + '?', 'Ikut terhapus: ' + (parts.length ? parts.join('; ') : 'tidak ada catatan lain') + '. Menu tetap ada tetapi COGS-nya dihitung ulang tanpa bahan ini. Ini tidak bisa dibatalkan.', 'ing-purge-ok', { id: id }, 'Hapus bahan');
+  }
+  function purgeIng(id) {
+    var st = S(), ing = CC.ingById(id); if (!ing) return;
+    st.menus.forEach(function (m) { m.lines = m.lines.filter(function (l) { return l.ingId !== id; }); });
+    st.trips.forEach(function (t) { t.lines = t.lines.filter(function (l) { return l.ingId !== id; }); });
+    st.trips = st.trips.filter(function (t) { return t.lines.length; });
+    st.stockAdj = st.stockAdj.filter(function (a) { return a.ingId !== id; });
+    st.ingredients = st.ingredients.filter(function (i) { return i.id !== id; });
+    CC.save(); closeDlg(); CC.render(); toast('Bahan ' + ing.name + ' dihapus.');
+  }
+  CC.openDeleteIng = openDeleteIng;
   function submitMin(f) {
     var i = CC.ingById(f.getAttribute('data-id')), q = num($('#mn-qty', dlg).value), u = $('#mn-unit', dlg).value;
     i.minStock = q > 0 ? q * UNITS[u].f : 0; CC.save(); closeDlg(); CC.render(); toast('Stok minimum disimpan.');
@@ -367,6 +418,12 @@
       CC.save(); closeDlg(); CC.render(); toast('Belanja dihapus, harga kembali ke pembelian sebelumnya.'); void tr;
     }
     else if (a === 'stock-open') openStockDetail(id);
+    else if (a === 'adj-del') {
+      var ingId = t.getAttribute('data-ing'); S().stockAdj = S().stockAdj.filter(function (x) { return x.id !== id; });
+      CC.save(); CC.render(); openStockDetail(ingId); toast('Koreksi dibatalkan.');
+    }
+    else if (a === 'ing-del-open') openDeleteIng(id);
+    else if (a === 'ing-purge-ok') purgeIng(id);
     else if (a === 'opname') openOpname();
     else if (a === 'shop-copy') {
       var txt = shopListText();
@@ -400,6 +457,7 @@
     var f = e.target;
     if (f.id === 'f-trip') submitTrip();
     else if (f.id === 'f-min') submitMin(f);
+    else if (f.id === 'f-adj') submitAdj(f);
     else if (f.id === 'f-opname') submitOpname();
   });
 })();
