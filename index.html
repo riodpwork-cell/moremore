@@ -9,10 +9,13 @@
 <meta name="theme-color" content="#121210" media="(prefers-color-scheme: dark)">
 <link rel="icon" type="image/png" href="brand/favicon.png">
 <link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Schibsted+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="brand/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="brand/fonts/permanent-marker-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+/* font disimpan di repo (lisensi OFL dan Apache 2.0): cepat, tanpa pihak ketiga, tetap tampil saat sinyal lemah */
+@font-face { font-family: "Plus Jakarta Sans"; src: url("brand/fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("brand/fonts/bricolage-grotesque-latin-wght-normal.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Permanent Marker"; src: url("brand/fonts/permanent-marker-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 /* Arah: identitas More. Kertas krem dan tinta hitam dari lembar karakter, hijau More sebagai
    satu-satunya aksen (dipakai versi lebih gelap untuk teks dan tombol supaya lolos AA), lockup
    "more + burung" di kepala, burung lari sebagai maskot di layar kosong. Motif struk (garis
@@ -402,12 +405,199 @@ h1 { letter-spacing: -.01em; }
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .empty::before { filter: invert(.93) sepia(.15); } }
 :root[data-theme="dark"] .empty::before { filter: invert(.93) sepia(.15); }
+
+/* ---------- v3: lebih segar ----------
+   Font: Bricolage Grotesque untuk judul dan angka (berkarakter, sedikit "tangan", cocok dengan
+   lettering More), Plus Jakarta Sans untuk teks (bulat, ramah, rancangan Jakarta), Permanent
+   Marker untuk judul halaman dan sapaan (meniru huruf kapital spidol di deck: "MORE OR ENOUGH?").
+   Tata letak: sidebar dan bar atas hijau tua dengan lockup krem, kartu melayang lembut di atas
+   kertas krem, dashboard dibuka kartu sapaan dengan angka nyata hari ini.
+   Gerak (MOTION 2): isi halaman naik bertahap, dialog membesar halus, burung melompat sekali.
+   Semua dimatikan di prefers-reduced-motion. */
+:root {
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  --font-hand: "Permanent Marker", "Bricolage Grotesque", cursive;
+  --peach: #F2A07B; --terra: #9C3F1E;
+  --rc: 18px;
+  --rail-bg: #2F4A22; --rail-ink: #F2ECDD; --rail-ink-2: #CBD6BC; --rail-hover: rgba(242, 236, 221, .1);
+  --rail-warn: #F7C6A3; --rail-ok: #BFE3A2;
+  --hero: #3F6130; --hero-blob: #6E9350;
+  --shadow: 0 1px 2px rgba(47, 42, 20, .06), 0 10px 28px -18px rgba(47, 60, 20, .45);
+  --shadow-up: 0 2px 4px rgba(47, 42, 20, .08), 0 18px 36px -18px rgba(47, 60, 20, .55);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --rail-bg: #18230F; --hero: #24381A; --hero-blob: #4C6C35; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.9); --shadow-up: 0 2px 4px rgba(0,0,0,.5), 0 18px 36px -18px rgba(0,0,0,.95); } }
+:root[data-theme="dark"] { --rail-bg: #18230F; --hero: #24381A; --hero-blob: #4C6C35; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.9); --shadow-up: 0 2px 4px rgba(0,0,0,.5), 0 18px 36px -18px rgba(0,0,0,.95); }
+
+body { font-size: 15.5px; letter-spacing: -.003em; }
+h1 { font-size: clamp(1.75rem, 1.3rem + 1.8vw, 2.4rem); font-weight: 800; letter-spacing: -.025em; }
+h2 { font-size: 1.1875rem; font-weight: 700; letter-spacing: -.01em; }
+.group > h2 { font-size: 1.1875rem; margin-bottom: 4px; }
+.pagehead { margin-bottom: 24px; }
+.lede { font-size: 1rem; }
+
+/* rail: hijau tua, lockup krem */
+.rail { background: var(--rail-bg); color: var(--rail-ink); border: 0; }
+.rail .wm-l { display: none !important; }
+.rail .wm-d { display: block !important; }
+.rail .appname { color: var(--rail-ink); border-color: rgba(242, 236, 221, .35); }
+.rail .sub { color: var(--rail-ink-2); }
+.rail .syncst, .rail .syncst.warn { color: var(--rail-warn); }
+.rail .saved { color: var(--rail-ok); }
+.rail .saved::before { background: var(--rail-ok); }
+.rail .btn { background: transparent; color: var(--rail-ink); border-color: rgba(242, 236, 221, .45); }
+.rail .btn:hover { background: var(--rail-hover); border-color: var(--rail-ink); color: var(--rail-ink); }
+.rail :focus-visible { outline-color: var(--rail-ink); }
+
+/* nav mobile: bar bawah krem buram, item aktif berpil hijau di belakang ikon */
+.nav { background: color-mix(in srgb, var(--surface) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-top: 1px solid var(--line); }
+.nav a[aria-current="page"]::before { display: none; }
+.nav a, .nav .navmore { color: var(--ink-2); font-weight: 600; font-size: .75rem; }
+.nav svg { box-sizing: content-box; padding: 4px 18px; border-radius: 999px; transition: background-color .25s var(--ease), transform .25s var(--ease); }
+.nav a[aria-current="page"] svg, .nav .navmore[aria-current="true"] svg { background: var(--accent-soft); color: var(--accent); }
+.nav a[aria-current="page"], .nav .navmore[aria-current="true"] { color: var(--ink); }
+.nav a:hover, .nav .navmore:hover { background: none; color: var(--ink); }
+.nav a:hover svg { background: var(--line); }
+.nav a[aria-current="page"]:hover svg { background: var(--accent-soft); }
+.nav a:active svg { transform: scale(.92); }
+@media (min-width: 900px) {
+  .rail { padding: 26px 16px 20px; }
+  .nav { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; gap: 4px; }
+  .nav a, .nav .navmore { color: var(--rail-ink-2); font-size: .9375rem; min-height: 44px; border-radius: 12px; padding: 0 12px; }
+  .nav svg { padding: 0; background: none !important; width: 20px; height: 20px; }
+  .nav a:hover { background: var(--rail-hover); color: var(--rail-ink); }
+  .nav a[aria-current="page"] { background: var(--rail-ink); color: var(--rail-bg); font-weight: 700; }
+  .nav a[aria-current="page"] svg { color: var(--rail-bg); }
+  .nav a[aria-current="page"]:hover { background: var(--rail-ink); }
+}
+
+/* permukaan: kartu melayang */
+.rows, .sec, .struk, .tbl-wrap, .strip, .empty, .tick, .mat { border-radius: var(--rc); }
+.rows, .sec, .struk, .tbl-wrap, .tick { border-color: transparent; box-shadow: var(--shadow); }
+.strip { border-color: transparent; box-shadow: var(--shadow); padding: 12px 14px; }
+.strip.warn { box-shadow: none; }
+.struk { border: 0; border-top: 0; padding: 20px 18px; position: relative; overflow: hidden; }
+.struk::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px; background: var(--brand); }
+.struk h2 { border-bottom-width: 2px; }
+.leader.total b { font-size: 1.875rem; letter-spacing: -.02em; }
+.price b, .minibar b { letter-spacing: -.02em; }
+.row { padding: 16px 18px; }
+.row:hover { background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+.sec { padding: 18px; }
+.empty { border: 1.5px dashed var(--line-strong); background: color-mix(in srgb, var(--surface) 70%, transparent); padding: 24px 22px; }
+dialog { border: 0; border-radius: 22px; box-shadow: 0 30px 80px -20px rgba(20, 30, 10, .55); }
+dialog::backdrop { background: rgba(24, 35, 15, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.dlg { padding: 22px 20px; }
+.toast { border-radius: 14px; box-shadow: var(--shadow-up); }
+.minibar { box-shadow: 0 -8px 24px -18px rgba(47, 60, 20, .6); border-top: 0; }
+
+/* kontrol */
+.btn { border-radius: 12px; border-width: 1.5px; transition: background-color .15s, border-color .15s, transform .15s var(--ease), box-shadow .15s; }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); }
+.btn.primary { box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--accent) 80%, transparent); }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, #000); border-color: transparent; color: var(--accent-ink); box-shadow: 0 10px 20px -10px color-mix(in srgb, var(--accent) 90%, transparent); }
+.btn.quiet:hover, .btn:disabled:hover { transform: none; }
+input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], select, textarea { border-radius: 12px; border-width: 1.5px; border-color: var(--line); transition: border-color .15s, box-shadow .15s; }
+input:hover, select:hover, textarea:hover { border-color: var(--line-strong); }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+.seg label { border-radius: 999px; border-width: 1.5px; border-color: var(--line); transition: background-color .15s, border-color .15s; }
+.seg label:hover { border-color: var(--line-strong); }
+
+/* dashboard: kartu sapaan */
+.hero {
+  position: relative; overflow: hidden; border-radius: 24px; padding: 22px 20px 20px; margin-bottom: 26px;
+  background: var(--hero); color: #F2ECDD; display: grid; gap: 16px; isolation: isolate;
+}
+.hero::before {
+  content: ""; position: absolute; z-index: -1; right: -40px; top: -50px; width: 220px; height: 200px;
+  background: var(--hero-blob); border-radius: 58% 42% 55% 45% / 52% 60% 40% 48%;
+}
+.hero .hi { font-family: var(--font-hand); font-size: 1.5rem; line-height: 1; color: #F7C6A3; }
+.hero h1 { color: #F2ECDD; margin-top: 4px; }
+.hero .date { color: #DCE5CF; margin-top: 4px; }
+.hero .bird { position: absolute; z-index: -1; right: 6px; top: 6px; width: 132px; height: auto; filter: invert(.94) sepia(.2); transform-origin: 50% 90%; }
+.hero .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hero .stat { background: rgba(242, 236, 221, .12); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.hero .stat b { display: block; font-family: var(--font-display); font-size: 1.375rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; overflow-wrap: anywhere; }
+.hero .stat span { font-size: .8125rem; color: #DCE5CF; }
+.hero .hi { display: block; }
+.hero > div:not(.stats) { padding-right: 96px; }
+@media (min-width: 700px) {
+  .hero { padding: 30px 32px; gap: 20px; }
+  .hero > div:not(.stats) { padding-right: 220px; }
+  .hero::before { right: 34px; top: auto; bottom: -70px; width: 250px; height: 250px; }
+  .hero .bird { right: 52px; top: auto; bottom: 18px; width: 190px; }
+  .hero .stats { grid-template-columns: repeat(3, minmax(120px, max-content)); padding-right: 220px; }
+  .hero .stat { padding: 12px 16px; }
+  .hero .stat b { font-size: 1.75rem; }
+}
+@media (max-width: 699px) { .hero::before { right: -50px; top: -60px; width: 190px; height: 180px; } .hero .bird { width: 104px; right: 8px; top: 12px; } }
+@media (max-width: 420px) { .hero .stat b { font-size: 1.125rem; } }
+.dash { display: grid; gap: 4px 28px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) { .dash { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; } .dash .full { grid-column: 1 / -1; } }
+.dash .col { display: grid; min-width: 0; }
+
+/* gerak */
+@keyframes cc-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cc-pop { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cc-hop { 0% { transform: translateX(-14px); opacity: 0; } 45% { transform: translate(2px, -8px); opacity: 1; } 70% { transform: translate(0, 0); } 85% { transform: translateY(-3px); } 100% { transform: none; } }
+@keyframes cc-run { from { transform: translateX(-60px); opacity: 0; } to { transform: none; opacity: 1; } }
+#view.enter > section { animation: none; }
+#view.enter > section > *, #view.enter .dash > * { animation: cc-rise .42s var(--ease) both; }
+#view.enter > section > *:nth-child(2), #view.enter .dash > *:nth-child(1) { animation-delay: .05s; }
+#view.enter > section > *:nth-child(3), #view.enter .dash > *:nth-child(2) { animation-delay: .1s; }
+#view.enter > section > *:nth-child(4), #view.enter .dash > *:nth-child(3) { animation-delay: .15s; }
+#view.enter > section > *:nth-child(n+5), #view.enter .dash > *:nth-child(n+4) { animation-delay: .2s; }
+#view.enter .empty::before { animation: cc-hop .7s .25s var(--ease) both; }
+#view.enter .hero .bird { animation: cc-run .7s .1s var(--ease) both; }
+dialog[open] { animation: cc-pop .22s var(--ease); }
+.toast { animation: cc-pop .22s var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  #view.enter > section > *, #view.enter .dash > *, #view.enter .empty::before, #view.enter .hero .bird, dialog[open], .toast { animation: none !important; }
+  .btn, .btn:hover, .btn:active, .nav svg { transition: none; transform: none; }
+}
+
+/* ---------- v3b: rasa deck (spidol, coretan, peach) ---------- */
+#view h1 {
+  font-family: var(--font-hand); font-weight: 400; text-transform: uppercase; letter-spacing: .01em;
+  font-size: clamp(1.75rem, 1.25rem + 2vw, 2.6rem); line-height: 1.05; display: inline-block; position: relative; padding-bottom: 12px;
+}
+#view h1::after {
+  content: ""; position: absolute; left: 0; bottom: 0; width: min(100%, 220px); height: 10px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 10' preserveAspectRatio='none'%3E%3Cpath d='M3 7 C 50 2, 110 3, 160 5 S 205 6, 217 3' fill='none' stroke='%236E9350' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat left / 100% 100%;
+}
+#view.enter h1::after { animation: cc-draw .6s .15s var(--ease) both; }
+@keyframes cc-draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.hero h1 { font-size: clamp(2rem, 1.4rem + 2.6vw, 3rem); color: #F2ECDD; }
+.hero h1::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 10' preserveAspectRatio='none'%3E%3Cpath d='M3 7 C 50 2, 110 3, 160 5 S 205 6, 217 3' fill='none' stroke='%23F2A07B' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E") !important; }
+.hero .hi { font-family: var(--font-hand); font-size: 1.125rem; text-transform: uppercase; color: var(--peach); transform: rotate(-2deg); display: block; width: fit-content; }
+.group > h2 { font-family: var(--font-display); font-weight: 800; }
+/* pil status: isi lembut, bulat */
+#view .pill { border-radius: 999px; padding: 2px 10px; border-width: 1.5px; }
+#view .pill.warn { background: var(--warn-soft); }
+/* kartu tindakan: aksen peach di kiri sebagai penanda "perlu dikerjakan" */
+.dash .tick li { border-left: 4px solid var(--peach); }
+.dash .tick li:first-child { border-top-left-radius: var(--rc); }
+.dash .tick li:last-child { border-bottom-left-radius: var(--rc); }
+/* layar kosong: burung + catatan tangan */
+.empty::after {
+  content: "more, please!"; position: absolute; right: 18px; top: 16px; font-family: var(--font-hand);
+  color: var(--terra); font-size: .9375rem; transform: rotate(-4deg); opacity: .85; pointer-events: none;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .empty::after { color: var(--peach); } }
+:root[data-theme="dark"] .empty::after { color: var(--peach); }
+@media (max-width: 359px) { .empty::after { display: none; } }
+/* struk: total pakai spidol hijau */
+.leader.total b { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { #view.enter h1::after { animation: none; } }
 </style>
 </head>
 <body>
 <div class="shell">
   <aside class="rail">
-    <div class="brand"><span class="wordmark"><img class="wm wm-l" src="brand/lockup-green.png" width="640" height="248" alt="More"><img class="wm wm-d" src="brand/lockup-cream.png" width="640" height="248" alt="" aria-hidden="true"><span class="appname">Coffee Cost</span></span><span class="sub">Back office central kitchen</span><span id="syncst" class="syncst" role="status" aria-live="polite"></span></div>
+    <div class="brand"><span class="wordmark"><img class="wm wm-l" src="brand/lockup-green.png" width="640" height="248" alt="More"><img class="wm wm-d" src="brand/lockup-cream.png" width="640" height="248" alt="" aria-hidden="true"></span><span id="syncst" class="syncst" role="status" aria-live="polite"></span></div>
     <nav class="nav" id="nav" aria-label="Menu utama"></nav>
     <div class="slogan" aria-hidden="true"><img class="wm-l" src="brand/slogan-green.png" width="360" height="346" alt="" loading="lazy"><img class="wm-d" src="brand/slogan-cream.png" width="360" height="346" alt="" loading="lazy"></div>
     <div class="actions-r"><span id="saved" class="saved" role="status" aria-live="polite"></span>

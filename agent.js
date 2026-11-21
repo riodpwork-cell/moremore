@@ -11,8 +11,8 @@
 
   var st0 = document.createElement('style');
   st0.textContent =
-    '.ck{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}' +
-    '.ck li{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--line)}' +
+    '.ck{list-style:none;margin:0;padding:0;background:var(--surface);border:0;border-radius:var(--rc,18px);box-shadow:var(--shadow)}' +
+    '.ck li{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--line)}' +
     '.ck li:first-child{border-top:0}.ck li.done .tx{color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--line-strong)}' +
     '.ck .tx{flex:1 1 200px;min-width:0}.ck .btns{display:flex;gap:6px;flex-wrap:wrap}.ck .btn{padding:0 12px}' +
     '.ck .meta{display:block}' +
@@ -97,14 +97,14 @@
   }
   function ckListHTML() {
     var items = checklist(), p = items.filter(function (i) { return !i.done; }), d = items.filter(function (i) { return i.done; });
-    if (!items.length) return '<div class="empty"><p>Belum ada yang perlu diingat. Katakan ke Asisten, misalnya "ingatkan beli susu Jumat", dan pengingatnya muncul di sini.</p></div>';
+    if (!items.length) return '<div class="empty"><p>Belum ada yang perlu diingat. Pengingat dari agen di chat Claude muncul di sini.</p></div>';
     return '<ul class="ck">' + p.concat(d).map(ckRow).join('') + '</ul>';
   }
   CC.checklistGroupHTML = function () {
     var items = checklist(); if (!items.length) return '';
     var n = items.filter(function (i) { return !i.done; }).length;
     return '<div class="group"><h2>Pengingat hari ini' + (n ? ' <span class="hint">' + n + ' belum</span>' : ' <span class="hint">semua beres</span>') + '</h2>' + ckListHTML() +
-      '<div><a class="btn" href="#asisten">Tanya Asisten</a></div></div>';
+      '</div>';
   };
 
   function refreshBadge() {
@@ -611,7 +611,7 @@
     if (e.target.id === 'ag-text' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
   });
 
-  CC.addRoute('asisten', { label: 'Asisten', order: 15, primary: true, render: renderPage });
+  /* halaman Asisten dihapus dari menu; mesin aksi (CC.agentApply) tetap dipakai antrean agen Supabase */
   CC.addRenderHook(function () { refreshBadge(); });
   CC.addSaveHook(refreshBadge);
 })();

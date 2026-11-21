@@ -12,12 +12,12 @@
     '.rt{font-weight:600;font-size:1.0625rem}' +
     '.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}' +
     '.acts .btn{padding:0 12px}' +
-    '.pill{display:inline-block;font-size:.8125rem;font-weight:600;border:1px solid var(--line-strong);border-radius:var(--r);padding:1px 8px}' +
+    '.pill{display:inline-block;font-size:.8125rem;font-weight:600;border:1.5px solid var(--line-strong);border-radius:999px;padding:2px 10px}' +
     '.pill.bad{color:var(--bad);border-color:var(--bad)}.pill.warn{color:var(--warn);border-color:var(--warn)}.pill.good{color:var(--ok);border-color:var(--ok)}' +
-    '.tick{list-style:none;margin:0;padding:0;display:grid;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}' +
-    '.tick li{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:12px 14px;border-top:1px solid var(--line)}' +
+    '.tick{list-style:none;margin:0;padding:0;display:grid;gap:0;background:var(--surface);border:0;border-radius:var(--rc,18px);box-shadow:var(--shadow)}' +
+    '.tick li{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:14px 16px;border-top:1px solid var(--line)}' +
     '.tick li:first-child{border-top:0}.tick .btn{padding:0 12px}' +
-    '.mat{display:grid;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}';
+    '.mat{display:grid;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:10px 12px}';
   document.head.appendChild(st0);
 
   function cartName(id) {
@@ -419,19 +419,26 @@
       '<details style="margin-top:8px"><summary>Lihat angka per hari</summary><ul class="hist">' + days.map(function (d, k) { return '<li><span>' + esc(fmtDate(d)) + '</span><b>' + rp(vals[k]) + '</b></li>'; }).join('') + '</ul></details>' :
       '<div class="empty"><p>Belum ada omzet yang bisa digambar. Grafik muncul setelah rekap harian pertama diisi dengan harga jual dan turus.</p></div>';
     var dtxt = new Date(t + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    view.innerHTML = '<section aria-labelledby="h-dash"><div class="pagehead"><div><h1 id="h-dash" tabindex="-1">Dashboard</h1><p class="lede">' + esc(greetWord() + '. ' + dtxt) + '</p></div></div>' +
+    var cupsOk = st.menus.reduce(function (n, m) { return n + (cb[m.id] ? cb[m.id].okTotal : 0); }, 0);
+    var hero = '<div class="hero"><img class="bird" src="brand/bird-run.png" width="420" height="340" alt="">' +
+      '<div><span class="hi">' + esc(greetWord()) + '!</span><h1 id="h-dash" tabindex="-1">Dashboard</h1><p class="date">' + esc(dtxt) + '</p></div>' +
+      '<div class="stats">' +
+      '<div class="stat"><b>' + acts.length + '</b><span>perlu tindakan</span></div>' +
+      '<div class="stat"><b>' + nf2.format(cupsOk) + '</b><span>cup layak kirim</span></div>' +
+      '<div class="stat"><b>' + (vals[13] > 0 ? rp(vals[13]) : 'Rp0') + '</b><span>omzet hari ini</span></div></div></div>';
+    view.innerHTML = '<section aria-labelledby="h-dash">' + hero + '<div class="dash"><div class="col">' +
       '<div class="group"><h2>Perlu tindakan</h2>' + (acts.length ? '<ul class="tick">' + acts.join('') + '</ul>' : '<div class="empty"><p>Tidak ada yang perlu ditindak saat ini.</p></div>') + '</div>' +
-      (CC.checklistGroupHTML ? CC.checklistGroupHTML() : '') +
+      (CC.checklistGroupHTML ? CC.checklistGroupHTML() : '') + '</div><div class="col">' +
       '<div class="group"><h2>Hari ini</h2><div class="struk">' + todayRows + '</div></div>' +
-      '<div class="group"><h2>Stok RTD di central</h2>' + (stockHTML || '<div class="empty"><p>Belum ada menu.</p></div>') + '</div>' +
-      '<div class="group"><h2>Berapa omzet bersih per hari dalam 14 hari terakhir?</h2>' + chart + '</div></section>';
+      '<div class="group"><h2>Stok RTD di central</h2>' + (stockHTML || '<div class="empty"><p>Belum ada menu.</p></div>') + '</div></div>' +
+      '<div class="group full"><h2>Berapa omzet bersih per hari dalam 14 hari terakhir?</h2>' + chart + '</div></div></section>';
   }
 
   /* ---------- routes ---------- */
   CC.addRoute('dashboard', { label: 'Dashboard', order: 10, primary: true, render: renderDash });
   CC.addRoute('rekap', { label: 'Rekap harian', order: 20, primary: true, render: function () { CC.renderRecap(); } });
   CC.addRoute('kirim', { label: 'Pengiriman', order: 30, primary: true, render: renderShip });
-  CC.addRoute('produksi', { label: 'Produksi', order: 40, primary: false, render: renderProd });
+  CC.addRoute('produksi', { label: 'Produksi', order: 40, primary: true, render: renderProd });
 
   /* ---------- events ---------- */
   document.addEventListener('click', function (e) {
