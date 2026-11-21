@@ -130,12 +130,12 @@ Semua jenis di bawah memakai aturan antrean yang sama: dicek dulu, ditolak utuh 
 |---|---|---|
 | `bahan_buat` | `{name, kind?: bahan\|perlengkapan, base: g\|ml\|pcs, minStock?, density?, packSize?, refPrice?: {qty, unit, price}}` | nama tidak boleh kembar. `perlengkapan` (cup, sedotan) selalu pcs. `packSize` = isi satu kemasan dalam satuan dasar (misal 950), lalu satuan `pcs` boleh dipakai. `refPrice` = harga acuan untuk COGS tanpa menambah stok |
 | `bahan_ubah` | `{ingId\|name, newName?, minStock?, density?, packSize?}` | nama bahan homemade diubah lewat `homemade_ubah` |
-| `homemade_buat` | `{name, base: g\|ml, yieldQty, note?, density?, ratios?, lines: [{ingId\|name, qty, unit, newBase?}]}` | `yieldQty` = hasil jadi per resep dalam satuan dasar. Bahan baru dibuat otomatis bila `newBase` dikirim. Resep boleh memakai homemade lain |
-| `homemade_ubah` | `{hmId\|name, newName?, yieldQty?, note?, density?, ratios?, lines?}` | siklus (resep memakai dirinya sendiri) ditolak |
-| `menu_buat` | `{name, price?, targetMargin?, loss?, shelfDays?, lines: [{section: rtd\|cart, ingId\|name, qty, unit, newBase?}]}` | `targetMargin` dan `loss` dalam persen |
-| `menu_ubah` | `{menuId\|name, newName?, price?, targetMargin?, loss?, shelfDays?, lines?}` | |
+| `homemade_buat` | `{name, base: g\|ml\|pcs, yieldQty, pieceWeight?, note?, density?, ratios?, lines: [{ingId\|name, qty, unit, newBase?}]}` | `yieldQty` = hasil jadi per resep dalam satuan dasar. Bahan baru dibuat otomatis bila `newBase` dikirim. Resep boleh memakai homemade lain |
+| `homemade_ubah` | `{hmId\|name, newName?, yieldQty?, pieceWeight?, note?, density?, ratios?, lines?}` | siklus (resep memakai dirinya sendiri) ditolak |
+| `menu_buat` | `{name, unit?: cup\|pcs, price?, targetMargin?, loss?, shelfDays?, lines: [{section: rtd\|cart, ingId\|name, qty, unit, newBase?}]}` | `targetMargin` dan `loss` dalam persen |
+| `menu_ubah` | `{menuId\|name, newName?, unit?, price?, targetMargin?, loss?, shelfDays?, lines?}` | |
 | `stok_opname` | `{date, items: [{ingId\|name, counted, unit}]}` | `counted` = hasil hitung fisik. Aplikasi menghitung selisih dari saldo |
-| `produksi` | `{date, menuId\|name, cups, expiry?, code?, note?}` | `expiry` default dari `shelfDays` menu, `code` dibuat otomatis, kode kembar ditolak |
+| `produksi` | `{date, menuId\|name, cups, expiry?, code?, note?, lines?: [{ingId\|name, qty, unit}]}` | `cups` = jumlah jadi (cup atau pcs). `lines` = total pemakaian aktual satu batch untuk bahan resep bagian central, misalnya filling dari piping bag. Bahan yang tidak dikirim memakai takaran resep. Rata-rata per pcs dihitung otomatis. `expiry` default dari `shelfDays` menu, `code` dibuat otomatis, kode kembar ditolak |
 | `pengiriman` | `{date, cartId?, type: awal\|tambahan, time?: "HH:MM", note?, lines: [{menuId\|name, qty}]}` | ditolak bila stok central tidak cukup |
 | `pembuangan` | `{date, batchId\|batchCode, qty, reason: Expired\|Rusak\|Tumpah\|Lainnya}` | `qty` tidak boleh melebihi sisa batch |
 | `cart_buat` | `{name, openingCash?}` | |
@@ -153,3 +153,11 @@ Contoh membuat bahan homemade:
 ```
 
 Harga homemade dihitung otomatis dari harga bahan di resepnya, jadi `summary` akan menyebut bahan yang belum punya harga. Catat dulu `belanja` untuk bahan itu.
+
+
+### Batching roti dan filling
+
+- **Adonan per batch**: buat bahan homemade dengan satuan `pcs` (misalnya Sweet bun polos). `yieldQty` = patokan jumlah roti per batch, `pieceWeight` = berat adonan per pcs (opsional, untuk perkiraan jumlah). Di halaman homemade bisa memakai **baker's %**: isi berat tepung (100%), gram bahan lain dihitung dari persennya. Saat catat masak, isi jumlah roti yang benar-benar jadi; biaya per roti = biaya batch dibagi jumlah roti.
+- **Filling dan topping**: bahan homemade biasa (gram). Di resep menu isi rata-rata gram per pcs sebagai patokan.
+- **Produk roti**: menu dengan satuan jual `pcs`. Bagian "Dibuat di central" berisi 1 pcs roti polos, filling, topping, kemasan.
+- **Produksi**: pilih "Isi pemakaian aktual" lalu isi total filling yang terpakai untuk batch itu (timbang piping bag sebelum dan sesudah). Aplikasi menampilkan rata-rata gram per pcs dan selisihnya dari resep, dan stok berkurang sesuai angka aktual.

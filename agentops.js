@@ -125,12 +125,12 @@
   reg('homemade_buat', false, function (a, errors, dry) {
     var name = txt(a.name, 60), base = a.base, yq = numv(a.yieldQty), note = txt(a.note, 200), density = numv(a.density);
     if (!name) errors.push('Nama kosong.'); else if (nameTaken(name)) errors.push('Sudah ada bahan bernama ' + name + ' di Bank of Goods.');
-    if (base !== 'g' && base !== 'ml') errors.push('base homemade harus g atau ml.');
+    if (base !== 'g' && base !== 'ml' && base !== 'pcs') errors.push('base homemade harus g, ml, atau pcs.');
     if (!(yq > 0)) errors.push('yieldQty (hasil jadi dalam satuan dasar) harus lebih dari 0.');
     var rl = resolveLines(a.lines, errors), ratios = readRatios(a.ratios, errors);
     if (errors.length || dry) return;
     var made = makeNews(rl.news), hid = uid('h'), iid = uid('i');
-    var hm = { id: hid, name: name, base: base, yieldQty: yq, density: density > 0 ? density : null, note: note, ingId: iid, ratios: ratios || {}, lines: rl.items.map(function (it) { return { id: uid('hl'), ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; }) };
+    var pw = numv(a.pieceWeight), hm = { id: hid, name: name, base: base, yieldQty: yq, density: density > 0 ? density : null, note: note, ingId: iid, ratios: ratios || {}, pieceWeight: base === 'pcs' && pw > 0 ? pw : null, lines: rl.items.map(function (it) { return { id: uid('hl'), ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; }) };
     S().homemades.push(hm);
     S().ingredients.push({ id: iid, name: name, base: base, density: hm.density, purchases: [], homemadeId: hid });
     return 'Bahan homemade ' + name + ' dibuat: ' + rl.items.length + ' bahan, hasil jadi ' + yq + ' ' + UNITS[base].label + '.' + (rl.news.length ? ' Bahan baru: ' + rl.news.map(function (n) { return n.name; }).join(', ') + '.' : '') + noPrice(rl.items, made);
@@ -143,13 +143,14 @@
     if (density != null && !(density > 0)) errors.push('density harus lebih dari 0.');
     if (a.lines !== undefined) rl = resolveLines(a.lines, errors, { hm: hm });
     var ratios = readRatios(a.ratios, errors);
-    if (nn == null && yq === undefined && density === undefined && a.note === undefined && !rl && !ratios) errors.push('Tidak ada yang diubah (newName, yieldQty, density, note, lines, ratios).');
+    if (nn == null && yq === undefined && density === undefined && a.note === undefined && !rl && !ratios && a.pieceWeight === undefined) errors.push('Tidak ada yang diubah (newName, yieldQty, density, note, lines, ratios).');
     if (errors.length || dry) return;
     var ch = [], ing = CC.ingById(hm.ingId);
     if (nn != null) { ch.push('nama menjadi ' + nn); hm.name = nn; if (ing) ing.name = nn; }
     if (yq !== undefined) { hm.yieldQty = yq; ch.push('hasil jadi ' + yq + ' ' + UNITS[hm.base].label); }
     if (density !== undefined) { hm.density = density > 0 ? density : null; if (ing) ing.density = hm.density; ch.push('densitas'); }
     if (a.note !== undefined) { hm.note = txt(a.note, 200); ch.push('catatan'); }
+    if (a.pieceWeight !== undefined) { var pw2 = numv(a.pieceWeight); hm.pieceWeight = pw2 > 0 ? pw2 : null; ch.push('berat per pcs'); }
     if (ratios) { hm.ratios = hm.ratios || {}; Object.keys(ratios).forEach(function (k) { hm.ratios[k] = ratios[k]; }); ch.push('rasio ' + Object.keys(ratios).map(function (k) { return k + ' ' + Math.round(ratios[k] * 1000) / 10 + '%'; }).join(', ')); }
     var made = {};
     if (rl) { made = makeNews(rl.news); hm.lines = rl.items.map(function (it) { return { id: uid('hl'), ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; }); ch.push('resep diganti (' + hm.lines.length + ' bahan)'); }
@@ -167,6 +168,7 @@
       if ((p[0] === 'targetMargin' || p[0] === 'loss') && v != null && v > 100) { errors.push(p[0] + ' maksimal 100 (persen).'); return; }
       f[p[0]] = v == null ? null : (p[0] === 'shelfDays' ? Math.round(v) : v);
     });
+    if (a.unit !== undefined) { if (a.unit === 'cup' || a.unit === 'pcs') f.unit = a.unit; else errors.push('unit menu harus cup atau pcs.'); }
     return f;
   }
   reg('menu_buat', false, function (a, errors, dry) {
@@ -181,21 +183,21 @@
     m.lines = rl.items.map(function (it) { return { id: uid('l'), section: it.section, ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; });
     S().menus.push(m); if (!S().activeMenu) S().activeMenu = m.id;
     var c = CC.calcMenu(m);
-    return 'Menu ' + name + ' dibuat dengan ' + m.lines.length + ' bahan. COGS per cup ' + (c.cogs != null ? rp(c.cogs) : 'belum lengkap') + '.' + noPrice(rl.items, made);
+    return 'Menu ' + name + ' dibuat dengan ' + m.lines.length + ' bahan. COGS per ' + CC.menuUnit(m) + ' ' + (c.cogs != null ? rp(c.cogs) : 'belum lengkap') + '.' + noPrice(rl.items, made);
   });
   reg('menu_ubah', false, function (a, errors, dry) {
     var m = menuRef(a); if (!m) { errors.push('Menu tidak ditemukan.'); return; }
     var nn = a.newName != null ? txt(a.newName, 60) : null, f = menuFields(a, errors, m), rl = null;
     if (nn != null) { if (!nn) errors.push('newName kosong.'); else if (S().menus.some(function (x) { return x.id !== m.id && x.name.toLowerCase() === nn.toLowerCase(); })) errors.push('Sudah ada menu bernama ' + nn + '.'); }
     if (a.lines !== undefined) rl = resolveLines(a.lines, errors, { sections: ['rtd', 'cart'] });
-    if (nn == null && !Object.keys(f).length && !rl) errors.push('Tidak ada yang diubah (newName, price, targetMargin, loss, shelfDays, lines).');
+    if (nn == null && !Object.keys(f).length && !rl) errors.push('Tidak ada yang diubah (newName, unit, price, targetMargin, loss, shelfDays, lines).');
     if (errors.length || dry) return;
     var ch = [], made = {};
     if (nn != null) { ch.push('nama menjadi ' + nn); m.name = nn; }
     Object.keys(f).forEach(function (k) { m[k] = f[k]; ch.push(k + ' ' + (f[k] == null ? 'dikosongkan' : f[k])); });
     if (rl) { made = makeNews(rl.news); m.lines = rl.items.map(function (it) { return { id: uid('l'), section: it.section, ingId: ingOf(it, made).id, qty: it.qty, unit: it.unit }; }); ch.push('resep diganti (' + m.lines.length + ' bahan)'); }
     var c = CC.calcMenu(m);
-    return 'Menu ' + m.name + ' diubah: ' + ch.join(', ') + '. COGS per cup ' + (c.cogs != null ? rp(c.cogs) : 'belum lengkap') + '.' + (rl ? noPrice(rl.items, made) : '');
+    return 'Menu ' + m.name + ' diubah: ' + ch.join(', ') + '. COGS per ' + CC.menuUnit(m) + ' ' + (c.cogs != null ? rp(c.cogs) : 'belum lengkap') + '.' + (rl ? noPrice(rl.items, made) : '');
   });
 
   /* ---------- stok opname ---------- */
@@ -231,10 +233,32 @@
     else if (exp < a.date) errors.push('expiry tidak boleh sebelum tanggal produksi.');
     if (!code) code = CC.genCode(a.date, m.id);
     if (S().batches.some(function (b) { return b.code === code; })) errors.push('Kode batch ' + code + ' sudah dipakai.');
+    /* lines (opsional): total pemakaian aktual satu batch, per bahan resep bagian central. Bahan yang tidak dikirim memakai takaran resep. */
+    var totals = null;
+    if (a.lines !== undefined) {
+      totals = {};
+      (Array.isArray(a.lines) ? a.lines : []).forEach(function (l, k) {
+        l = l || {}; var ing = ingRef(l), q = numv(l.qty), tag = 'Baris ' + (k + 1) + ': ';
+        var rl = ing ? m.lines.filter(function (x) { return x.section === 'rtd' && x.ingId === ing.id; })[0] : null;
+        if (!rl) { errors.push(tag + 'bahan tidak ada di resep central menu ' + m.name + '.'); return; }
+        if (!(q >= 0)) { errors.push(tag + 'qty tidak terbaca.'); return; }
+        if (q === 0) { totals[rl.id] = 0; return; }
+        var b = CC.toBase(ing, q, l.unit || rl.unit), per = CC.toBase(ing, 1, rl.unit);
+        if (b == null || !(per > 0)) { errors.push(tag + 'satuan tidak cocok dengan ' + ing.name + '.'); return; }
+        totals[rl.id] = b / per;
+      });
+    }
     if (errors.length || dry) return;
-    var c = CC.calcMenu(m);
-    S().batches.push({ id: uid('b'), date: a.date, menuId: m.id, cups: cups, expiry: exp, code: code, note: txt(a.note, 200), costPerCup: c.rtd + c.rtdLoss, usage: CC.usageForBatch(m, cups) });
-    return 'Batch ' + code + ' dicatat: ' + m.name + ' ' + cups + ' cup, expired ' + fmtDate(exp) + '. Bahan terpakai dikurangi dari stok.';
+    var c = CC.calcMenu(m), u = CC.menuUnit(m), rec = { id: uid('b'), date: a.date, menuId: m.id, cups: cups, expiry: exp, code: code, note: txt(a.note, 200), costPerCup: c.rtd + c.rtdLoss, usage: CC.usageForBatch(m, cups) };
+    var extra = '';
+    if (totals && Object.keys(totals).length) {
+      var r = CC.batchFromActual(m, cups, totals);
+      rec.costPerCup = r.perCup; rec.usage = r.usage;
+      rec.actual = r.rows.map(function (x) { return { ingId: x.ing.id, total: x.total, unit: x.line.unit, per: x.per, fromRecipe: !x.actual }; });
+      extra = ' Pemakaian aktual: ' + r.rows.filter(function (x) { return x.actual; }).map(function (x) { return x.ing.name + ' ' + CC.nf2.format(Math.round(x.total * 100) / 100) + ' ' + UNITS[x.line.unit].label + ' (rata-rata ' + CC.nf2.format(Math.round(x.per * 100) / 100) + ' ' + UNITS[x.line.unit].label + ' per ' + u + ')'; }).join(', ') + '.';
+    }
+    S().batches.push(rec);
+    return 'Batch ' + code + ' dicatat: ' + m.name + ' ' + cups + ' ' + u + ', expired ' + fmtDate(exp) + ', biaya ' + rp(rec.costPerCup) + ' per ' + u + '.' + extra + ' Bahan terpakai dikurangi dari stok.';
   });
   reg('pengiriman', true, function (a, errors, dry) {
     var st = S(), cart = a.cartId ? st.carts.filter(function (c) { return c.id === a.cartId; })[0] : st.carts[0], type = a.type || 'awal', lines = [];

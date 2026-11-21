@@ -15,6 +15,18 @@
     return hm;
   }
   function ingOf(hm) { return CC.ingById(hm.ingId); }
+  /* total bahan dalam gram (dipakai untuk adonan pcs dan baker's %) */
+  function gramsIn(hm) {
+    var t = 0, ok = true;
+    hm.lines.forEach(function (l) { var ing = CC.ingById(l.ingId); if (!ing || !(l.qty > 0)) return; var g = CC.toBase({ base: 'g', density: ing.density }, l.qty, l.unit); if (g == null) ok = false; else t += g; });
+    return ok ? t : null;
+  }
+  function canGram(ing) { return !!ing && CC.unitOptions(ing).indexOf('g') > -1; }
+  /* baker's %: qty = persen x berat tepung, satuan gram */
+  function applyBakers(hm) {
+    if (!hm.bakers || !(hm.bakerFlour > 0)) return;
+    hm.lines.forEach(function (l) { if (l.pct > 0 && canGram(CC.ingById(l.ingId))) { l.qty = Math.round(l.pct / 100 * hm.bakerFlour * 100) / 100; l.unit = 'g'; } });
+  }
 
   /* bahan yang bergantung pada resep ini tidak boleh dipilih, supaya tidak saling memanggil */
   function dependsOn(ing, hmId, depth) {
@@ -38,6 +50,7 @@
     var uopts = units.map(function (u) { return '<option value="' + u + '"' + (u === l.unit ? ' selected' : '') + '>' + esc(CC.unitLabel(ing, u)) + '</option>'; }).join('');
     return '<li class="line">' +
       '<div class="field ing"><label for="hi-' + id + '">Bahan dari Bank of Goods</label><select id="hi-' + id + '" data-hf="ing" data-id="' + id + '">' + opts + '</select></div>' +
+      (hm.bakers ? '<div class="field qty"><label for="hp-' + id + '">Baker\'s %</label><input id="hp-' + id + '" type="number" inputmode="decimal" min="0" step="any" data-hp="' + id + '" value="' + (l.pct > 0 ? esc(l.pct) : '') + '"></div>' : '') +
       '<div class="field qty"><label for="hq-' + id + '">Jumlah</label><input id="hq-' + id + '" type="number" inputmode="decimal" min="0" step="any" data-hf="qty" data-id="' + id + '" value="' + (l.qty > 0 ? esc(l.qty) : '') + '"></div>' +
       '<div class="field unit"><label for="hu-' + id + '">Satuan</label><select id="hu-' + id + '" data-hf="unit" data-id="' + id + '">' + uopts + '</select></div>' +
       '<div class="field cost"><span class="lbl">Biaya</span>' + CC.costOutHTML(l.id, calc.per[l.id]).replace('data-cost=', 'data-hcost=') + '</div>' +
@@ -52,7 +65,13 @@
     h += leader('Hasil jadi', c.yield ? nf2.format(c.yield) + ' ' + u : 'Belum diisi');
     if (c.shrink != null) h += leader(c.shrink >= 0 ? 'Susut dari bahan masuk' : 'Bertambah dari bahan masuk', nf2.format(Math.abs(c.shrink)) + '%');
     h += leader('Harga per ' + u, c.perBase != null ? rpS(c.perBase) : 'Belum bisa dihitung', 'total');
-    if (c.perBase != null) h += leader('Harga per ' + big, rp(c.perBase * 1000));
+    if (c.perBase != null && hm.base !== 'pcs') h += leader('Harga per ' + big, rp(c.perBase * 1000));
+    if (hm.base === 'pcs') {
+      var gi = gramsIn(hm);
+      if (gi) h += leader('Total adonan', nf0.format(Math.round(gi)) + ' gr');
+      if (gi && hm.pieceWeight > 0) h += leader('Perkiraan jumlah (' + nf0.format(hm.pieceWeight) + ' gr per pcs)', nf0.format(Math.floor(gi / hm.pieceWeight)) + ' pcs');
+      if (gi && c.yield) h += leader('Rata-rata adonan per pcs', nf2.format(Math.round(gi / c.yield * 10) / 10) + ' gr');
+    }
     var ing = ingOf(hm), n = ing ? CC.usedIn(ing.id).length : 0;
     h += '<p class="note">Tersimpan di Bank of Goods sebagai <strong>' + esc(hm.name || 'tanpa nama') + '</strong>. ' + (n ? 'Dipakai di ' + n + ' resep.' : 'Belum dipakai di resep mana pun.') + '</p>';
     if (!c.yield) h += '<p class="note warn"><strong>Isi hasil jadi.</strong> Harga per ' + u + ' dihitung dari hasil setelah dimasak, jadi bahan ini belum bisa dipakai di menu.</p>';
@@ -81,14 +100,17 @@
       '<button type="button" class="btn danger" data-act="hm-del">Hapus</button></div>' +
       '<div class="editor"><div class="fields">' +
       '<div class="field wide"><label for="hm-name">Nama bahan</label><input id="hm-name" type="text" autocomplete="off" data-hmf="name" value="' + esc(hm.name) + '"></div>' +
-      '<div class="field"><label for="hm-yield">Hasil jadi setelah dimasak (' + u + ')</label><input id="hm-yield" type="number" inputmode="decimal" min="0" step="any" data-hmf="yieldQty" value="' + (hm.yieldQty > 0 ? esc(hm.yieldQty) : '') + '" aria-describedby="hm-yield-h"><span class="hint" id="hm-yield-h">Timbang hasil akhir. Harga per ' + u + ' dibagi dari angka ini.</span></div>' +
+      '<div class="field"><label for="hm-yield">' + (hm.base === 'pcs' ? 'Jumlah jadi per batch (pcs)' : 'Hasil jadi setelah dimasak (' + u + ')') + '</label><input id="hm-yield" type="number" inputmode="decimal" min="0" step="any" data-hmf="yieldQty" value="' + (hm.yieldQty > 0 ? esc(hm.yieldQty) : '') + '" aria-describedby="hm-yield-h"><span class="hint" id="hm-yield-h">' + (hm.base === 'pcs' ? 'Patokan jumlah roti per batch. Jumlah sungguhan diisi saat catat masak.' : 'Timbang hasil akhir. Harga per ' + u + ' dibagi dari angka ini.') + '</span></div>' +
+      (hm.base === 'pcs' ? '<div class="field"><label for="hm-pw">Berat adonan per pcs (gr), opsional</label><input id="hm-pw" type="number" inputmode="decimal" min="0" step="any" data-hmf="pieceWeight" value="' + (hm.pieceWeight > 0 ? esc(hm.pieceWeight) : '') + '"></div>' : '') +
+      '<div class="field wide"><label class="chk"><input type="checkbox" id="hm-bakers"' + (hm.bakers ? ' checked' : '') + '> Pakai baker\'s % (isi persen, gram dihitung dari berat tepung)</label></div>' +
+      (hm.bakers ? '<div class="field"><label for="hm-flour">Berat tepung untuk batch ini, 100% (gr)</label><input id="hm-flour" type="number" inputmode="decimal" min="0" step="any" data-hmf="bakerFlour" value="' + (hm.bakerFlour > 0 ? esc(hm.bakerFlour) : '') + '"></div>' : '') +
       '<div class="field"><label for="hm-dens">Berat jenis (gram per ml), opsional</label><input id="hm-dens" type="number" inputmode="decimal" min="0" step="any" data-hmf="density" value="' + (hm.density > 0 ? esc(hm.density) : '') + '" aria-describedby="hm-dens-h"><span class="hint" id="hm-dens-h">Isi bila bahan ini dipakai di resep dengan satuan gram dan ml.</span></div>' +
       '<div class="field wide"><label for="hm-note">Catatan cara membuat, opsional</label><input id="hm-note" type="text" autocomplete="off" data-hmf="note" value="' + esc(hm.note || '') + '"></div></div>' +
       '<div class="struk" id="hm-out" aria-labelledby="h-hm-out">' + outHTML(hm, c) + '</div>' +
       '<div class="sections"><section class="sec" aria-labelledby="h-hm-lines"><header><h2 id="h-hm-lines">Bahan yang dipakai</h2><p class="hint">Pilih dari Bank of Goods. Bahan homemade lain juga boleh dipakai.</p></header>' +
       (hm.lines.length ? '<ul class="lines">' + hm.lines.map(function (l) { return lineHTML(hm, l, c); }).join('') + '</ul>' : '<p class="line-empty">Belum ada bahan di resep ini.</p>') +
       '<div><button type="button" class="btn" data-act="hm-add-line"' + (none ? ' disabled' : '') + '>Tambah bahan</button>' +
-      (none ? ' <span class="hint">Isi Bank of Goods dulu.</span>' : '') + '</div></section>' + ratioHTML(hm) + cookHistoryHTML(hm) + '</div></div></section>';
+      (none ? ' <span class="hint">Isi Bank of Goods dulu.</span>' : '') + '</div></section>' + (hm.base === 'pcs' ? '' : ratioHTML(hm)) + cookHistoryHTML(hm) + '</div></div></section>';
   }
   function cookHistoryHTML(hm) {
     var u = UNITS[hm.base].label;
@@ -193,10 +215,10 @@
       return '<div class="field"><label for="ckl-' + esc(l.id) + '">' + esc(ing.name) + ' (' + UNITS[l.unit].label + ')</label><input id="ckl-' + esc(l.id) + '" type="number" inputmode="decimal" min="0" step="any" data-ckl="' + esc(l.id) + '" value="' + (l.qty > 0 ? esc(l.qty) : '') + '"></div>';
     }).join('');
     openDlg(dlgHead('Catat masak ' + esc(hm.name)) + '<form id="f-cook" novalidate>' +
-      '<fieldset class="seg"><legend>Cara catat</legend><label><input type="radio" name="ck-mode" value="cepat" checked>Cepat: berat jadi saja</label><label><input type="radio" name="ck-mode" value="lengkap">Lengkap: timbang bahan</label></fieldset>' +
+      '<fieldset class="seg"><legend>Cara catat</legend><label><input type="radio" name="ck-mode" value="cepat" checked>' + (hm.base === 'pcs' ? 'Cepat: sesuai resep' : 'Cepat: berat jadi saja') + '</label><label><input type="radio" name="ck-mode" value="lengkap">Lengkap: timbang bahan</label></fieldset>' +
       '<div class="grid2"><div class="field"><label for="ck-date">Tanggal masak</label><input id="ck-date" type="date" value="' + CC.todayISO() + '"></div>' +
-      '<div class="field"><label for="ck-qty">Hasil jadi aktual (' + u + ')</label><input id="ck-qty" type="number" inputmode="decimal" min="0" step="any" placeholder="resep: ' + esc(hm.yieldQty) + '"></div></div>' +
-      '<fieldset class="seg"><legend id="ck-level-legend">Kekentalan</legend>' + lv + '</fieldset>' +
+      '<div class="field"><label for="ck-qty">' + (hm.base === 'pcs' ? 'Jumlah jadi aktual (pcs)' : 'Hasil jadi aktual (' + u + ')') + '</label><input id="ck-qty" type="number" inputmode="decimal" min="0" step="any" placeholder="resep: ' + esc(hm.yieldQty) + '"></div></div>' +
+      (hm.base === 'pcs' ? '' : '<fieldset class="seg"><legend id="ck-level-legend">Kekentalan</legend>' + lv + '</fieldset>') +
       '<div id="ck-lines" hidden><p class="hint">Bahan mengikuti resep. Ubah gramasi sesuai yang benar-benar dipakai. Kosongkan bila tidak dipakai.</p><div class="grid2">' + lines + '</div></div>' +
       '<div class="field"><label for="ck-note">Catatan, opsional</label><input id="ck-note" type="text" autocomplete="off"></div>' +
       '<div class="mat" id="ck-prev" aria-live="polite">' + previewHTML(hm, null) + '</div><p class="err" id="ck-err" role="alert"></p>' +
@@ -229,7 +251,7 @@
   function openNew() {
     openDlg(dlgHead('Bahan homemade baru') +
       '<form id="f-hm-new" novalidate><div class="field"><label for="hn-name">Nama bahan</label><input id="hn-name" type="text" autocomplete="off"></div>' +
-      '<fieldset class="seg"><legend>Satuan hasil dan harga</legend><label><input type="radio" name="hn-base" value="g" checked>Gram</label><label><input type="radio" name="hn-base" value="ml">Mililiter</label></fieldset>' +
+      '<fieldset class="seg"><legend>Satuan hasil dan harga</legend><label><input type="radio" name="hn-base" value="g" checked>Gram</label><label><input type="radio" name="hn-base" value="ml">Mililiter</label><label><input type="radio" name="hn-base" value="pcs">Pcs (roti, per biji)</label></fieldset>' +
       '<p class="err" id="hn-err" role="alert"></p><div class="actions"><button type="button" class="btn" data-act="close">Batal</button><button type="submit" class="btn primary">Buat bahan</button></div></form>', '#hn-name');
   }
   function nameTaken(name, exceptIngId) {
@@ -280,6 +302,26 @@
     }
   });
 
+  function syncQtyInputs(hm) { hm.lines.forEach(function (l) { var q = $('#hq-' + l.id); if (q && document.activeElement !== q) q.value = l.qty > 0 ? l.qty : ''; var u = $('#hu-' + l.id); if (u && u.value !== l.unit) u.value = l.unit; }); }
+  document.addEventListener('input', function (e) {
+    var hp = e.target.getAttribute && e.target.getAttribute('data-hp');
+    if (!hp) return;
+    var hh = current(); if (!hh) return;
+    var ln = hh.lines.filter(function (x) { return x.id === hp; })[0]; if (!ln) return;
+    ln.pct = num(e.target.value); applyBakers(hh); syncQtyInputs(hh); CC.save(); refresh();
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.id !== 'hm-bakers') return;
+    var hm = current(); if (!hm) return;
+    hm.bakers = e.target.checked;
+    if (hm.bakers) {
+      /* isi awal: bahan bernama tepung/flour jadi 100%, persen lain dihitung dari gram yang ada */
+      var fl = hm.lines.filter(function (l) { var i = CC.ingById(l.ingId); return i && /tepung|flour/i.test(i.name) && l.qty > 0; });
+      if (!(hm.bakerFlour > 0)) hm.bakerFlour = fl.reduce(function (s2, l) { return s2 + (CC.toBase({ base: 'g', density: null }, l.qty, l.unit) || 0); }, 0) || null;
+      if (hm.bakerFlour > 0) hm.lines.forEach(function (l) { var g = CC.toBase({ base: 'g', density: (CC.ingById(l.ingId) || {}).density }, l.qty, l.unit); if (g > 0 && !(l.pct > 0)) l.pct = Math.round(g / hm.bakerFlour * 1000) / 10; });
+    }
+    CC.save(); render(); var f = $('#hm-bakers'); if (f) f.focus();
+  });
   document.addEventListener('input', function (e) {
     var t = e.target, f = t.getAttribute('data-hmf'), lf = t.getAttribute('data-hf');
     if (!f && !lf) return;
@@ -290,12 +332,17 @@
       else {
         hm[f] = num(t.value);
         if (f === 'density') { var ing = ingOf(hm); if (ing) ing.density = hm.density > 0 ? hm.density : null; }
+        if (f === 'bakerFlour') { applyBakers(hm); syncQtyInputs(hm); }
       }
       CC.save(); refresh(); return;
     }
     if (lf === 'qty') {
       var l = hm.lines.filter(function (x) { return x.id === t.getAttribute('data-id'); })[0];
-      if (l) { l.qty = num(t.value); CC.save(); refresh(); }
+      if (l) {
+        l.qty = num(t.value);
+        if (hm.bakers && hm.bakerFlour > 0 && l.unit === 'g' && l.qty > 0) { l.pct = Math.round(l.qty / hm.bakerFlour * 1000) / 10; var pe = $('#hp-' + l.id); if (pe) pe.value = l.pct; }
+        CC.save(); refresh();
+      }
     }
   });
 

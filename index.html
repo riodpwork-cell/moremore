@@ -898,6 +898,8 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
   function baseLabel(b) { return UNITS[b].label; }
 
   /* ---------- cogs ---------- */
+  /* satuan jual menu: cup (RTD) atau pcs (roti, kue) */
+  function menuUnit(m) { if (typeof m === 'string') m = menuById(m); return m && m.unit === 'pcs' ? 'pcs' : 'cup'; }
   function calcMenu(m) {
     var rtd = 0, cart = 0, missing = 0, bad = 0, per = {};
     m.lines.forEach(function (l) {
@@ -1027,14 +1029,15 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       (none ? '<p class="hint">Bank of Goods masih kosong. Tambahkan bahan di sini, langsung masuk resep dan Bank of Goods.</p>' : '') + '</section>';
   }
   function strukHTML(m, c) {
-    var h = '<h2 id="h-struk">Struk COGS per cup</h2>';
-    h += leader('RTD dari central', rp(c.rtd));
+    var u = menuUnit(m);
+    var h = '<h2 id="h-struk">Struk COGS per ' + u + '</h2>';
+    h += leader(u === 'pcs' ? 'Dibuat di central' : 'RTD dari central', rp(c.rtd));
     if (c.lossPct > 0) h += leader('Susut produksi ' + nf2.format(c.lossPct * 100) + '%', rp(c.rtdLoss));
     h += leader('Tambahan di cart', rp(c.cart));
-    h += leader('COGS per cup', rp(c.cogs), 'total');
+    h += leader('COGS per ' + u, rp(c.cogs), 'total');
     h += leader('Harga jual', c.price ? rp(c.price) : 'Belum diisi');
     if (c.price) {
-      h += leader('Margin per cup', rp(c.margin) + ' (' + nf2.format(c.marginPct) + '%)');
+      h += leader('Margin per ' + menuUnit(m), rp(c.margin) + ' (' + nf2.format(c.marginPct) + '%)');
       h += leader('Food cost', nf2.format(c.foodCostPct) + '%');
       if (c.tm && c.foodCostPct > 100 - c.tm) {
         h += '<p class="note warn"><strong>Food cost di atas batas.</strong> Target margin ' + nf2.format(c.tm) + '% berarti food cost maksimal ' + nf2.format(100 - c.tm) + '%. Naikkan harga jual atau tekan biaya bahan.</p>';
@@ -1068,14 +1071,17 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
       '<div class="editor">' +
       '<div class="fields">' +
       '<div class="field wide"><label for="m-name">Nama menu</label><input id="m-name" type="text" data-f="name" value="' + esc(m.name) + '" autocomplete="off"></div>' +
-      '<div class="field"><label for="m-price">Harga jual per cup (Rp)</label><input id="m-price" type="number" inputmode="numeric" min="0" step="any" data-f="price" value="' + (m.price > 0 ? esc(m.price) : '') + '"></div>' +
+      '<div class="field"><label for="m-unit">Satuan jual</label><select id="m-unit" data-mu="1"><option value="cup"' + (menuUnit(m) === 'cup' ? ' selected' : '') + '>Cup (minuman RTD)</option><option value="pcs"' + (menuUnit(m) === 'pcs' ? ' selected' : '') + '>Pcs (roti, kue, snack)</option></select></div>' +
+      '<div class="field"><label for="m-price">Harga jual per ' + menuUnit(m) + ' (Rp)</label><input id="m-price" type="number" inputmode="numeric" min="0" step="any" data-f="price" value="' + (m.price > 0 ? esc(m.price) : '') + '"></div>' +
       '<div class="field"><label for="m-tm">Target margin (%)</label><input id="m-tm" type="number" inputmode="decimal" min="0" max="99" step="any" data-f="targetMargin" value="' + (m.targetMargin > 0 ? esc(m.targetMargin) : '') + '"></div>' +
       '<div class="field"><label for="m-loss">Susut produksi (%)</label><input id="m-loss" type="number" inputmode="decimal" min="0" max="95" step="any" data-f="loss" value="' + (m.loss > 0 ? esc(m.loss) : '') + '" aria-describedby="m-loss-h"><span class="hint" id="m-loss-h">Bagian RTD yang hilang di central, misalnya tumpah.</span></div>' +
-      '<div class="field"><label for="m-shelf">Umur simpan RTD (hari)</label><input id="m-shelf" type="number" inputmode="numeric" min="0" step="1" data-f="shelfDays" value="' + (m.shelfDays > 0 ? esc(m.shelfDays) : '') + '" aria-describedby="m-shelf-h"><span class="hint" id="m-shelf-h">Dipakai untuk mengisi tanggal expired batch produksi.</span></div>' +
+      '<div class="field"><label for="m-shelf">Umur simpan (hari)</label><input id="m-shelf" type="number" inputmode="numeric" min="0" step="1" data-f="shelfDays" value="' + (m.shelfDays > 0 ? esc(m.shelfDays) : '') + '" aria-describedby="m-shelf-h"><span class="hint" id="m-shelf-h">Dipakai untuk mengisi tanggal expired batch produksi.</span></div>' +
       '</div>' +
       '<div class="struk" id="struk" aria-labelledby="h-struk">' + strukHTML(m, c) + '</div>' +
       '<div class="sections">' +
-      sectionHTML(m, 'rtd', 'RTD dari central', 'Isi dan kemasan cup yang dibuat di central kitchen: kopi, susu, sirup, cup, tutup, stiker.', c) +
+      (menuUnit(m) === 'pcs'
+        ? sectionHTML(m, 'rtd', 'Dibuat di central', 'Bahan per pcs yang dipakai di central kitchen: roti polos (homemade pcs), filling, topping, kemasan. Untuk filling isi rata-rata gram per pcs. Pemakaian sungguhan per batch dicatat saat produksi.', c)
+        : sectionHTML(m, 'rtd', 'RTD dari central', 'Isi dan kemasan cup yang dibuat di central kitchen: kopi, susu, sirup, cup, tutup, stiker.', c)) +
       sectionHTML(m, 'cart', 'Tambahan di cart', 'Yang ditambah di cart: es, topping, sedotan, kantong. Biayanya masuk COGS, stoknya berkurang lewat turus di rekap harian.', c) +
       '</div></div><div class="minibar" id="minibar" role="status" aria-live="off">' + miniHTML(c) + '</div></section>';
   }
@@ -1541,12 +1547,17 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     var d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t.getAttribute || !t.getAttribute('data-mu')) return;
+    var m = menuById(state.activeMenu) || state.menus[0]; if (!m) return;
+    m.unit = t.value === 'pcs' ? 'pcs' : 'cup'; save(); render(); var f = $('#m-unit'); if (f) f.focus();
+  });
   window.CC = {
     get state() { return state; },
     save: save, render: render, addRoute: addRoute, esc: esc, rp: rp, nf2: nf2, nf0: nf0, NB: NB,
     fmtDate: fmtDate, todayISO: todayISO, addDays: addDays, numOrNull: numOrNull, uid: uid, toast: toast,
     openDlg: openDlg, closeDlg: closeDlg, dlgHead: dlgHead, openConfirm: openConfirm,
-    calcMenu: calcMenu, menuById: menuById, ingById: ingById, toBase: toBase, $: $, leader: leader,
+    calcMenu: calcMenu, menuUnit: menuUnit, menuById: menuById, ingById: ingById, toBase: toBase, $: $, leader: leader,
     pricePerBase: pricePerBase, unitOptions: unitOptions, unitLabel: unitLabel, packText: packText, calcHomemade: calcHomemade, homemadeById: homemadeById, usedIn: usedIn,
     costOutHTML: costOutHTML, baseLabel: baseLabel,
     view: view, dlg: dlg, UNITS: UNITS, ui: ui, openNewIng: openNewIng, ingOptionsHTML: ingOptionsHTML, recipeUnit: recipeUnit, isPerl: isPerl, refPerBase: refPerBase,

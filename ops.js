@@ -125,7 +125,7 @@
       '<div class="acts">' +
       (q > 0 ? '<button type="button" class="btn" data-act="writeoff" data-id="' + esc(b.id) + '">Buang stok</button>' : '') +
       '<button type="button" class="btn danger" data-act="del-batch" data-id="' + esc(b.id) + '" aria-label="Hapus batch ' + esc(b.code) + '">Hapus</button></div></div>' +
-      '<div class="price"><b>' + nf2.format(q) + ' cup</b><span>sisa dari ' + nf2.format(b.cups) + ', ' + rp(b.costPerCup || 0) + ' per cup</span></div></li>';
+      '<div class="price"><b>' + nf2.format(q) + ' ' + CC.menuUnit(b.menuId) + '</b><span>sisa dari ' + nf2.format(b.cups) + ', ' + rp(b.costPerCup || 0) + ' per ' + CC.menuUnit(b.menuId) + (b.actual ? ', pemakaian aktual' : '') + '</span></div></li>';
   }
   function renderProd() {
     var st = S(), sim = simulate(st), t = today();
@@ -133,15 +133,15 @@
     var cb = centralByMenu(sim, t);
     var totals = st.menus.map(function (m) {
       var c = cb[m.id];
-      return leader(esc(m.name), nf2.format(c.okTotal) + ' cup' + (c.expTotal ? ' (+' + nf2.format(c.expTotal) + ' expired)' : ''));
+      return leader(esc(m.name), nf2.format(c.okTotal) + ' ' + CC.menuUnit(m) + (c.expTotal ? ' (+' + nf2.format(c.expTotal) + ' expired)' : ''));
     }).join('');
     view.innerHTML = '<section aria-labelledby="h-prod"><div class="pagehead"><div><h1 id="h-prod" tabindex="-1">Produksi</h1>' +
-      '<p class="lede">Catat batch RTD yang selesai dibuat di central. Stok bertambah per batch, lengkap dengan tanggal expired.</p></div>' +
+      '<p class="lede">Catat batch RTD atau roti yang selesai dibuat di central. Stok bertambah per batch, lengkap dengan tanggal expired.</p></div>' +
       '<button type="button" class="btn primary" data-act="new-batch"' + (st.menus.length ? '' : ' disabled') + '>Catat batch</button></div>' +
       (st.menus.length ? '' : '<div class="strip warn"><span>Buat menu dulu di <a href="#menu">Menu dan COGS</a> sebelum mencatat produksi.</span></div>') +
       (st.menus.length ? '<div class="struk" style="margin-bottom:20px"><h2>Stok layak kirim di central</h2>' + totals + '</div>' : '') +
       (list.length ? '<ul class="rows">' + list.map(function (b) { return batchRowHTML(b, sim, t); }).join('') + '</ul>' :
-        '<div class="empty"><p>Belum ada batch produksi. Catat batch pertama setelah RTD selesai dibuat dan dikemas per cup.</p></div>') +
+        '<div class="empty"><p>Belum ada batch produksi. Catat batch pertama setelah RTD atau roti selesai dibuat dan dikemas.</p></div>') +
       '</section>';
   }
 
@@ -154,21 +154,62 @@
     var n = S().batches.filter(function (b) { return b.date === date && b.menuId === menuId; }).length + 1;
     return 'B' + date.slice(2).replace(/-/g, '') + '-' + initials(m.name) + (n > 1 ? '-' + n : '');
   }
-  function batchPreview(m, cups) {
-    var c = CC.calcMenu(m), perCup = c.rtd + c.rtdLoss;
-    var loss = c.lossPct, rows = '';
+  /* Produksi: pakai takaran resep, atau isi pemakaian aktual per bahan (misalnya filling dari piping bag yang tidak rata per pcs).
+     Pemakaian aktual = total untuk satu batch. Rata-rata per pcs = total / jumlah jadi. Stok berkurang sesuai angka aktual. */
+  function rtdLines(m) { return m.lines.filter(function (l) { return l.section === 'rtd' && CC.ingById(l.ingId); }); }
+  function recipeNeed(m, l, cups) { var c = CC.calcMenu(m); return l.qty > 0 && cups > 0 ? l.qty * cups / (1 - c.lossPct) : 0; }
+  CC.batchFromActual = function (m, cups, totals) {
+    /* totals = {idBarisResep: total dalam satuan baris resep}. Baris yang tidak diisi memakai takaran resep. */
+    var usage = [], cost = 0, rows = [];
+    rtdLines(m).forEach(function (l) {
+      var ing = CC.ingById(l.ingId), t = totals && totals[l.id] != null && totals[l.id] >= 0 ? totals[l.id] : recipeNeed(m, l, cups);
+      var b = t > 0 ? CC.toBase(ing, t, l.unit) : 0, p = CC.pricePerBase(ing);
+      if (b > 0) usage.push({ ingId: ing.id, base: b });
+      var c = b > 0 && p != null ? b * p : 0; cost += c;
+      rows.push({ line: l, ing: ing, total: t, per: cups > 0 ? t / cups : 0, recipe: l.qty, actual: !!(totals && totals[l.id] != null), cost: c });
+    });
+    return { usage: usage, cost: cost, perCup: cups > 0 ? cost / cups : 0, rows: rows };
+  };
+  function batchPreview(m, cups, totals) {
+    var u = CC.menuUnit(m), c = CC.calcMenu(m);
+    if (totals) {
+      var r = CC.batchFromActual(m, cups, totals);
+      var rows = cups > 0 ? r.rows.map(function (x) {
+        var lb = CC.UNITS[x.line.unit].label, diff = x.recipe > 0 ? (x.per - x.recipe) / x.recipe * 100 : null;
+        return leader(esc(x.ing.name) + (x.actual ? '' : ' <span class="hint">(resep)</span>'), nf2.format(Math.round(x.total * 100) / 100) + ' ' + lb + ', rata-rata ' + nf2.format(Math.round(x.per * 100) / 100) + ' ' + lb + ' per ' + u + (x.actual && diff != null && Math.abs(diff) >= 0.5 ? ' (' + (diff > 0 ? '+' : '') + nf2.format(Math.round(diff * 10) / 10) + '% dari resep)' : ''));
+      }).join('') : '';
+      return { html: '<div class="mat" aria-live="polite"><strong>Pemakaian aktual untuk ' + (cups > 0 ? nf2.format(cups) : '0') + ' ' + u + '</strong>' +
+        (rows || '<span class="hint">Isi jumlah jadi untuk melihat rata-rata per ' + u + '.</span>') +
+        leader('Biaya central per ' + u, rp(r.perCup)) + (cups > 0 ? leader('Total biaya batch', rp(r.cost)) : '') + '</div>', perCup: r.perCup, usage: r.usage };
+    }
+    var perCup = c.rtd + c.rtdLoss, loss = c.lossPct, rows2 = '';
     if (cups > 0) {
       m.lines.filter(function (l) { return l.section === 'rtd' && l.qty > 0; }).forEach(function (l) {
         var ing = CC.ingById(l.ingId); if (!ing) return;
         var need = l.qty * cups / (1 - loss);
-        rows += leader(esc(ing.name), nf2.format(Math.ceil(need * 100) / 100) + ' ' + CC.UNITS[l.unit].label);
+        rows2 += leader(esc(ing.name), nf2.format(Math.ceil(need * 100) / 100) + ' ' + CC.UNITS[l.unit].label);
       });
     }
-    var h = '<div class="mat" aria-live="polite"><strong>Perkiraan bahan untuk ' + (cups > 0 ? nf2.format(cups) : '0') + ' cup</strong>' +
-      (rows || '<span class="hint">Isi jumlah cup untuk melihat kebutuhan bahan.</span>') +
-      leader('Biaya RTD per cup', rp(perCup)) + (cups > 0 ? leader('Total biaya batch', rp(perCup * cups)) : '') + '</div>';
-    if (c.missing) h += '<p class="note warn"><strong>Resep RTD belum lengkap.</strong> ' + c.missing + ' baris tanpa jumlah, biaya per cup bisa lebih rendah dari aslinya.</p>';
-    return { html: h, perCup: perCup };
+    var h = '<div class="mat" aria-live="polite"><strong>Perkiraan bahan untuk ' + (cups > 0 ? nf2.format(cups) : '0') + ' ' + u + '</strong>' +
+      (rows2 || '<span class="hint">Isi jumlah ' + u + ' untuk melihat kebutuhan bahan.</span>') +
+      leader('Biaya central per ' + u, rp(perCup)) + (cups > 0 ? leader('Total biaya batch', rp(perCup * cups)) : '') + '</div>';
+    if (c.missing) h += '<p class="note warn"><strong>Resep belum lengkap.</strong> ' + c.missing + ' baris tanpa jumlah, biaya per ' + u + ' bisa lebih rendah dari aslinya.</p>';
+    return { html: h, perCup: perCup, usage: CC.usageForBatch(m, cups) };
+  }
+  function actualFieldsHTML(m) {
+    var u = CC.menuUnit(m);
+    return '<p class="hint">Isi total yang benar-benar terpakai untuk batch ini. Untuk filling: timbang piping bag sebelum dan sesudah, isi selisihnya. Kosongkan bila sesuai resep.</p><div class="grid2">' +
+      rtdLines(m).map(function (l) {
+        var ing = CC.ingById(l.ingId);
+        return '<div class="field"><label for="bta-' + esc(l.id) + '">' + esc(ing.name) + ' total (' + CC.UNITS[l.unit].label + ')</label><input id="bta-' + esc(l.id) + '" type="number" inputmode="decimal" min="0" step="any" data-bta="' + esc(l.id) + '" placeholder="resep ' + nf2.format(l.qty || 0) + ' per ' + u + '"></div>';
+      }).join('') + '</div>';
+  }
+  function readTotals() {
+    var mode = ($('input[name="bt-mode"]:checked', dlg) || {}).value;
+    if (mode !== 'aktual') return null;
+    var t = {};
+    dlg.querySelectorAll('[data-bta]').forEach(function (inp) { var v = num(inp.value); if (v != null && v >= 0) t[inp.getAttribute('data-bta')] = v; });
+    return t;
   }
   function openBatch() {
     var st = S(), m0 = st.menus[0];
@@ -176,48 +217,56 @@
       '<form id="f-batch" novalidate>' +
       '<div class="grid2"><div class="field"><label for="bt-date">Tanggal produksi</label><input id="bt-date" type="date" value="' + today() + '"></div>' +
       '<div class="field"><label for="bt-menu">Menu</label><select id="bt-menu">' + st.menus.map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field"><label for="bt-cups">Jumlah cup jadi</label><input id="bt-cups" type="number" inputmode="numeric" min="0" step="1"></div>' +
+      '<div class="field"><label for="bt-cups" id="bt-cups-l">Jumlah jadi (' + CC.menuUnit(m0) + ')</label><input id="bt-cups" type="number" inputmode="numeric" min="0" step="1"></div>' +
       '<div class="field"><label for="bt-exp">Tanggal expired</label><input id="bt-exp" type="date"></div></div>' +
       '<div class="field"><label for="bt-code">Kode batch</label><input id="bt-code" type="text" autocomplete="off"></div>' +
+      '<fieldset class="seg"><legend>Pemakaian bahan</legend><label><input type="radio" name="bt-mode" value="resep" checked>Sesuai resep</label><label><input type="radio" name="bt-mode" value="aktual">Isi pemakaian aktual</label></fieldset>' +
+      '<div id="bt-actual" hidden></div>' +
       '<div class="field"><label for="bt-note">Catatan, opsional</label><input id="bt-note" type="text" autocomplete="off"></div>' +
       '<div id="bt-prev"></div><p class="err" id="bt-err" role="alert"></p>' +
       '<div class="actions"><button type="button" class="btn" data-act="close">Batal</button><button type="submit" class="btn primary">Simpan batch</button></div></form>', '#bt-cups');
     syncBatch(true, true);
   }
-  function syncBatch(autoExp, autoCode) {
+  function syncBatch(autoExp, autoCode, rebuild) {
     var date = $('#bt-date', dlg).value, mid = $('#bt-menu', dlg).value, m = CC.menuById(mid);
     if (autoExp && m && date && m.shelfDays > 0) $('#bt-exp', dlg).value = addDays(date, m.shelfDays);
     else if (autoExp && date && !(m && m.shelfDays > 0)) $('#bt-exp', dlg).value = '';
     if (autoCode && date) $('#bt-code', dlg).value = genCode(date, mid);
+    var box = $('#bt-actual', dlg), mode = ($('input[name="bt-mode"]:checked', dlg) || {}).value;
+    if (m) { var cl = $('#bt-cups-l', dlg); if (cl) cl.textContent = 'Jumlah jadi (' + CC.menuUnit(m) + ')'; }
+    if (box && m && (rebuild || !box.innerHTML)) box.innerHTML = actualFieldsHTML(m);
+    if (box) box.hidden = mode !== 'aktual';
     var cups = num($('#bt-cups', dlg).value);
-    $('#bt-prev', dlg).innerHTML = m ? batchPreview(m, cups).html : '';
+    $('#bt-prev', dlg).innerHTML = m ? batchPreview(m, cups, readTotals()).html : '';
   }
   function submitBatch() {
     var date = $('#bt-date', dlg).value, mid = $('#bt-menu', dlg).value, cups = num($('#bt-cups', dlg).value),
       exp = $('#bt-exp', dlg).value, code = $('#bt-code', dlg).value.trim(), err = $('#bt-err', dlg), m = CC.menuById(mid);
     if (!date) { err.textContent = 'Pilih tanggal produksi.'; return; }
-    if (!(cups > 0)) { err.textContent = 'Isi jumlah cup yang lebih dari 0.'; $('#bt-cups', dlg).focus(); return; }
+    if (!(cups > 0)) { err.textContent = 'Isi jumlah jadi yang lebih dari 0.'; $('#bt-cups', dlg).focus(); return; }
     if (!exp) { err.textContent = 'Isi tanggal expired. Isi umur simpan di Menu dan COGS supaya terisi otomatis.'; $('#bt-exp', dlg).focus(); return; }
     if (exp < date) { err.textContent = 'Tanggal expired tidak boleh sebelum tanggal produksi.'; $('#bt-exp', dlg).focus(); return; }
     if (!code) { err.textContent = 'Isi kode batch.'; $('#bt-code', dlg).focus(); return; }
     if (S().batches.some(function (b) { return b.code === code; })) { err.textContent = 'Kode batch ini sudah dipakai. Ganti dengan kode lain.'; $('#bt-code', dlg).focus(); return; }
-    S().batches.push({ id: uid('b'), date: date, menuId: mid, cups: cups, expiry: exp, code: code, note: $('#bt-note', dlg).value.trim(), costPerCup: batchPreview(m, cups).perCup, usage: CC.usageForBatch(m, cups) });
+    var tot = readTotals(), bp = batchPreview(m, cups, tot), rec = { id: uid('b'), date: date, menuId: mid, cups: cups, expiry: exp, code: code, note: $('#bt-note', dlg).value.trim(), costPerCup: bp.perCup, usage: bp.usage };
+    if (tot && Object.keys(tot).length) { rec.actual = CC.batchFromActual(m, cups, tot).rows.map(function (x) { return { ingId: x.ing.id, total: x.total, unit: x.line.unit, per: x.per, fromRecipe: !x.actual }; }); }
+    S().batches.push(rec);
     CC.save(); closeDlg(); CC.render(); toast('Batch ' + code + ' disimpan.');
   }
   function openWriteoff(id) {
     var b = S().batches.filter(function (x) { return x.id === id; })[0]; if (!b) return;
     var q = simulate(S()).stock[id] || 0;
     openDlg(dlgHead('Buang stok batch ' + esc(b.code)) +
-      '<form id="f-writeoff" data-id="' + esc(id) + '" novalidate><p class="hint">Stok tercatat ' + nf2.format(q) + ' cup.</p>' +
+      '<form id="f-writeoff" data-id="' + esc(id) + '" novalidate><p class="hint">Stok tercatat ' + nf2.format(q) + ' ' + CC.menuUnit(b.menuId) + '.</p>' +
       '<div class="grid2"><div class="field"><label for="wo-date">Tanggal</label><input id="wo-date" type="date" value="' + today() + '"></div>' +
-      '<div class="field"><label for="wo-qty">Jumlah cup dibuang</label><input id="wo-qty" type="number" inputmode="numeric" min="0" step="1" value="' + q + '"></div></div>' +
+      '<div class="field"><label for="wo-qty">Jumlah dibuang</label><input id="wo-qty" type="number" inputmode="numeric" min="0" step="1" value="' + q + '"></div></div>' +
       '<div class="field"><label for="wo-why">Alasan</label><select id="wo-why"><option>Expired</option><option>Rusak</option><option>Tumpah</option><option>Lainnya</option></select></div>' +
       '<p class="err" id="wo-err" role="alert"></p><div class="actions"><button type="button" class="btn" data-act="close">Batal</button><button type="submit" class="btn danger">Buang stok</button></div></form>', '#wo-qty');
   }
   function submitWriteoff(f) {
     var id = f.getAttribute('data-id'), q = simulate(S()).stock[id] || 0, qty = num($('#wo-qty', dlg).value), err = $('#wo-err', dlg);
     if (!(qty > 0)) { err.textContent = 'Isi jumlah yang lebih dari 0.'; return; }
-    if (qty > q) { err.textContent = 'Jumlah melebihi stok batch (' + nf2.format(q) + ' cup).'; return; }
+    if (qty > q) { err.textContent = 'Jumlah melebihi stok batch (' + nf2.format(q) + ' ' + CC.menuUnit(b.menuId) + ').'; return; }
     S().writeoffs.push({ id: uid('w'), date: $('#wo-date', dlg).value || today(), batchId: id, qty: qty, reason: $('#wo-why', dlg).value });
     CC.save(); closeDlg(); CC.render(); toast('Stok dibuang dan dicatat.');
   }
@@ -235,7 +284,7 @@
     return s.lines.filter(function (l) { return l.qty > 0; }).map(function (l) {
       var al = ((sim.shipAlloc[s.id] || {})[l.menuId] || []).filter(function (a) { return a.qty > 0; })
         .map(function (a) { return batchCode(a.batchId) + ': ' + nf2.format(a.qty); }).join(', ');
-      return { name: menuName(l.menuId), qty: l.qty, batches: al };
+      return { name: menuName(l.menuId), qty: l.qty, batches: al, unit: CC.menuUnit(l.menuId) };
     });
   }
   function renderShip() {
@@ -264,8 +313,8 @@
         var q = it.info[mid].retur.reduce(function (a, x) { return a + x.qty; }, 0) + it.info[mid].orphan;
         if (!q) return '';
         var bs = it.info[mid].retur.map(function (a) { return batchCode(a.batchId) + ': ' + nf2.format(a.qty); }).join(', ');
-        return '<span>' + esc(menuName(mid)) + ' ' + nf2.format(q) + ' cup' + (bs ? ' <span class="hint">(' + esc(bs) + ')</span>' : '') +
-          (it.info[mid].orphan ? ' <span class="pill warn">' + nf2.format(it.info[mid].orphan) + ' cup tanpa batch</span>' : '') + '</span>';
+        return '<span>' + esc(menuName(mid)) + ' ' + nf2.format(q) + ' ' + CC.menuUnit(mid) + (bs ? ' <span class="hint">(' + esc(bs) + ')</span>' : '') +
+          (it.info[mid].orphan ? ' <span class="pill warn">' + nf2.format(it.info[mid].orphan) + ' ' + CC.menuUnit(mid) + ' tanpa batch</span>' : '') + '</span>';
       }).join('');
       return '<li><div style="display:grid;gap:4px"><span class="rt">Retur dari rekap <span class="pill">' + esc(cartName(it.r.cartId)) + '</span></span>' + lines + '</div>' +
         '<button type="button" class="btn" data-act="goto-recap" data-date="' + esc(it.r.date) + '" data-cart="' + esc(it.r.cartId) + '">Buka rekap</button></li>';
@@ -273,9 +322,9 @@
     var s = it.s, ls = shipLinesText(s, sim);
     var short = sim.shortages.filter(function (x) { return x.shipId === s.id; });
     return '<li><div style="display:grid;gap:4px"><span class="rt">' + esc(TYPE[s.type] || s.type) + ' <span class="pill">' + esc(cartName(s.cartId)) + '</span>' + (s.time ? ' <span class="hint">' + esc(s.time) + '</span>' : '') + '</span>' +
-      ls.map(function (l) { return '<span>' + esc(l.name) + ' ' + nf2.format(l.qty) + ' cup' + (l.batches ? ' <span class="hint">(' + esc(l.batches) + ')</span>' : '') + '</span>'; }).join('') +
+      ls.map(function (l) { return '<span>' + esc(l.name) + ' ' + nf2.format(l.qty) + ' ' + (l.unit || 'cup') + (l.batches ? ' <span class="hint">(' + esc(l.batches) + ')</span>' : '') + '</span>'; }).join('') +
       (s.note ? '<span class="hint">' + esc(s.note) + '</span>' : '') +
-      short.map(function (x) { return '<span class="chk bad">Stok kurang ' + nf2.format(x.qty) + ' cup untuk ' + esc(menuName(x.menuId)) + '</span>'; }).join('') + '</div>' +
+      short.map(function (x) { return '<span class="chk bad">Stok kurang ' + nf2.format(x.qty) + ' ' + CC.menuUnit(x.menuId) + ' untuk ' + esc(menuName(x.menuId)) + '</span>'; }).join('') + '</div>' +
       '<div class="acts"><button type="button" class="btn" data-act="copy-sj" data-id="' + esc(s.id) + '">Salin surat jalan</button>' +
       '<button type="button" class="btn danger" data-act="del-ship" data-id="' + esc(s.id) + '">Hapus</button></div></li>';
   }
@@ -296,7 +345,7 @@
       '<fieldset class="seg"><legend>Jenis pengiriman</legend><label><input type="radio" name="sh-type" value="awal"' + (hasAwal ? '' : ' checked') + '>Stok awal</label>' +
       '<label><input type="radio" name="sh-type" value="tambahan"' + (hasAwal ? ' checked' : '') + '>Tambahan</label></fieldset>' +
       '<div class="grid2" id="sh-lines">' + st.menus.map(function (m) {
-        return '<div class="field"><label for="sh-q-' + esc(m.id) + '">' + esc(m.name) + ' (cup)</label><input id="sh-q-' + esc(m.id) + '" data-menu="' + esc(m.id) + '" type="number" inputmode="numeric" min="0" step="1"><span class="hint" data-av="' + esc(m.id) + '"></span></div>';
+        return '<div class="field"><label for="sh-q-' + esc(m.id) + '">' + esc(m.name) + ' (' + CC.menuUnit(m) + ')</label><input id="sh-q-' + esc(m.id) + '" data-menu="' + esc(m.id) + '" type="number" inputmode="numeric" min="0" step="1"><span class="hint" data-av="' + esc(m.id) + '"></span></div>';
       }).join('') + '</div>' +
       '<div class="field"><label for="sh-note">Catatan, opsional</label><input id="sh-note" type="text" autocomplete="off"></div>' +
       '<p class="err" id="sh-err" role="alert"></p>' +
@@ -307,7 +356,7 @@
     var date = $('#sh-date', dlg).value || today(), av = availAt(date);
     dlg.querySelectorAll('[data-av]').forEach(function (el) {
       var q = av[el.getAttribute('data-av')] || 0;
-      el.textContent = 'Layak kirim di central: ' + nf2.format(q) + ' cup';
+      el.textContent = 'Layak kirim di central: ' + nf2.format(q) + ' ' + CC.menuUnit(el.getAttribute('data-av'));
     });
   }
   function submitShip() {
@@ -317,12 +366,12 @@
     dlg.querySelectorAll('#sh-lines input').forEach(function (i) {
       var q = num(i.value); if (q > 0) lines.push({ menuId: i.getAttribute('data-menu'), qty: q });
     });
-    if (!lines.length) { err.textContent = 'Isi jumlah cup untuk minimal satu menu.'; $('#sh-lines input', dlg).focus(); return; }
+    if (!lines.length) { err.textContent = 'Isi jumlah untuk minimal satu menu.'; $('#sh-lines input', dlg).focus(); return; }
     var cand = { id: uid('s'), date: date, cartId: $('#sh-cart', dlg).value, type: ($('input[name="sh-type"]:checked', dlg) || {}).value || 'awal', time: $('#sh-time', dlg).value || '', lines: lines, note: $('#sh-note', dlg).value.trim() };
     var sim = simulate({ batches: st.batches, writeoffs: st.writeoffs, recaps: st.recaps, shipments: st.shipments.concat([cand]) });
     var short = sim.shortages.filter(function (x) { return x.shipId === cand.id; });
     if (short.length) {
-      err.textContent = 'Stok central tidak cukup: ' + short.map(function (x) { return menuName(x.menuId) + ' kurang ' + nf2.format(x.qty) + ' cup'; }).join(', ') + '. Cup yang sudah expired atau diproduksi setelah tanggal ini tidak dihitung.';
+      err.textContent = 'Stok central tidak cukup: ' + short.map(function (x) { return menuName(x.menuId) + ' kurang ' + nf2.format(x.qty) + ' ' + CC.menuUnit(x.menuId); }).join(', ') + '. Stok yang sudah expired atau diproduksi setelah tanggal ini tidak dihitung.';
       return;
     }
     st.shipments.push(cand); CC.save(); closeDlg(); CC.render(); toast('Pengiriman disimpan.');
@@ -330,7 +379,7 @@
   function sjText(s) {
     var sim = simulate(S()), ls = shipLinesText(s, sim);
     return ['SURAT JALAN', 'Tanggal: ' + fmtDate(s.date) + (s.time ? ' ' + s.time : ''), 'Cart: ' + cartName(s.cartId), 'Jenis: ' + (TYPE[s.type] || s.type), ''].concat(
-      ls.map(function (l) { return '- ' + l.name + ': ' + nf2.format(l.qty) + ' cup' + (l.batches ? ' (batch ' + l.batches + ')' : ''); }),
+      ls.map(function (l) { return '- ' + l.name + ': ' + nf2.format(l.qty) + ' ' + (l.unit || 'cup') + (l.batches ? ' (batch ' + l.batches + ')' : ''); }),
       s.note ? ['', 'Catatan: ' + s.note] : []).join('\n');
   }
   function copy(text) {
@@ -365,10 +414,10 @@
     // expired
     st.batches.forEach(function (b) {
       var q = sim.stock[b.id] || 0; if (q <= 0) return;
-      if (b.expiry < t) acts.push(actionRow('<span class="pill bad">Expired</span> Batch ' + esc(b.code) + ' masih tercatat ' + nf2.format(q) + ' cup', '<a class="btn" href="#produksi">Buka produksi</a>'));
-      else if (b.expiry <= addDays(t, warn)) acts.push(actionRow('<span class="pill warn">Segera expired</span> Batch ' + esc(b.code) + ', ' + nf2.format(q) + ' cup, expired ' + esc(fmtDate(b.expiry)), '<a class="btn" href="#kirim">Buka pengiriman</a>'));
+      if (b.expiry < t) acts.push(actionRow('<span class="pill bad">Expired</span> Batch ' + esc(b.code) + ' masih tercatat ' + nf2.format(q) + ' ' + CC.menuUnit(b.menuId), '<a class="btn" href="#produksi">Buka produksi</a>'));
+      else if (b.expiry <= addDays(t, warn)) acts.push(actionRow('<span class="pill warn">Segera expired</span> Batch ' + esc(b.code) + ', ' + nf2.format(q) + ' ' + CC.menuUnit(b.menuId) + ', expired ' + esc(fmtDate(b.expiry)), '<a class="btn" href="#kirim">Buka pengiriman</a>'));
     });
-    sim.shortages.forEach(function (x) { acts.push(actionRow('<span class="pill bad">Stok kurang</span> Pengiriman ' + esc(fmtDate(x.date)) + ' kekurangan ' + nf2.format(x.qty) + ' cup ' + esc(menuName(x.menuId)), '<a class="btn" href="#kirim">Buka pengiriman</a>')); });
+    sim.shortages.forEach(function (x) { acts.push(actionRow('<span class="pill bad">Stok kurang</span> Pengiriman ' + esc(fmtDate(x.date)) + ' kekurangan ' + nf2.format(x.qty) + ' ' + CC.menuUnit(x.menuId) + ' ' + esc(menuName(x.menuId)), '<a class="btn" href="#kirim">Buka pengiriman</a>')); });
     st.menus.forEach(function (m) {
       var c = CC.calcMenu(m);
       if (!(m.price > 0)) acts.push(actionRow('<span class="pill warn">Harga jual kosong</span> Menu ' + esc(m.name), '<a class="btn" href="#menu" data-act="pick-menu" data-id="' + esc(m.id) + '">Isi harga</a>'));
@@ -399,10 +448,10 @@
     var cb = centralByMenu(sim, t);
     var stockHTML = st.menus.map(function (m) {
       var c = cb[m.id];
-      var rows = c.ok.map(function (x) { return leader('Batch ' + esc(x.b.code) + ', expired ' + esc(fmtDate(x.b.expiry)), nf2.format(x.q) + ' cup'); }).join('');
-      if (c.expTotal) rows += leader('Expired, belum dibuang', nf2.format(c.expTotal) + ' cup');
-      if (c.orphan) rows += leader('Tanpa batch (retur melebihi catatan)', nf2.format(c.orphan) + ' cup');
-      return '<div class="group" style="margin-bottom:12px"><h2>' + esc(m.name) + ' <span class="hint">' + nf2.format(c.okTotal) + ' cup layak kirim</span></h2>' + (rows || '<p class="hint">Belum ada stok.</p>') + '</div>';
+      var rows = c.ok.map(function (x) { return leader('Batch ' + esc(x.b.code) + ', expired ' + esc(fmtDate(x.b.expiry)), nf2.format(x.q) + ' ' + CC.menuUnit(m)); }).join('');
+      if (c.expTotal) rows += leader('Expired, belum dibuang', nf2.format(c.expTotal) + ' ' + CC.menuUnit(m));
+      if (c.orphan) rows += leader('Tanpa batch (retur melebihi catatan)', nf2.format(c.orphan) + ' ' + CC.menuUnit(m));
+      return '<div class="group" style="margin-bottom:12px"><h2>' + esc(m.name) + ' <span class="hint">' + nf2.format(c.okTotal) + ' ' + CC.menuUnit(m) + ' layak kirim</span></h2>' + (rows || '<p class="hint">Belum ada stok.</p>') + '</div>';
     }).join('');
     // chart omzet
     var days = []; for (var i = 13; i >= 0; i--) days.push(addDays(t, -i));
@@ -424,7 +473,7 @@
       '<div><span class="hi">' + esc(greetWord()) + '!</span><h1 id="h-dash" tabindex="-1">Dashboard</h1><p class="date">' + esc(dtxt) + '</p></div>' +
       '<div class="stats">' +
       '<div class="stat"><b>' + acts.length + '</b><span>perlu tindakan</span></div>' +
-      '<div class="stat"><b>' + nf2.format(cupsOk) + '</b><span>cup layak kirim</span></div>' +
+      '<div class="stat"><b>' + nf2.format(cupsOk) + '</b><span>stok layak kirim</span></div>' +
       '<div class="stat"><b>' + (vals[13] > 0 ? rp(vals[13]) : 'Rp0') + '</b><span>omzet hari ini</span></div></div></div>';
     // pintasan: pekerjaan harian yang paling sering
     var IC = CC.icons || {}, ico = function (n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[n] || '') + '</svg>'; };
@@ -477,7 +526,7 @@
     else if (a === 'del-batch') {
       var b = S().batches.filter(function (x) { return x.id === id; })[0]; if (!b) return;
       if (batchRefs(id)) openConfirm('Batch tidak bisa dihapus', 'Batch ' + esc(b.code) + ' sudah dikirim ke cart atau dibuang. Hapus pengiriman atau catatan buang yang terkait dulu.', 'close', {}, 'Mengerti');
-      else openConfirm('Hapus batch?', 'Batch ' + esc(b.code) + ' (' + nf2.format(b.cups) + ' cup) akan dihapus dari stok central.', 'del-batch-ok', { id: id }, 'Hapus batch');
+      else openConfirm('Hapus batch?', 'Batch ' + esc(b.code) + ' (' + nf2.format(b.cups) + ' ' + CC.menuUnit(b.menuId) + ') akan dihapus dari stok central.', 'del-batch-ok', { id: id }, 'Hapus batch');
     }
     else if (a === 'del-batch-ok') { S().batches = S().batches.filter(function (x) { return x.id !== id; }); CC.save(); closeDlg(); CC.render(); toast('Batch dihapus.'); }
     else if (a === 'new-ship') openShip();
@@ -493,11 +542,13 @@
   });
   document.addEventListener('input', function (e) {
     var t = e.target;
-    if (t.id === 'bt-cups') syncBatch(false, false);
+    if (t.id === 'bt-cups' || (t.getAttribute && t.getAttribute('data-bta'))) syncBatch(false, false);
   });
   document.addEventListener('change', function (e) {
     var t = e.target;
-    if (t.id === 'bt-date' || t.id === 'bt-menu') syncBatch(true, true);
+    if (t.id === 'bt-date') syncBatch(true, true);
+    else if (t.id === 'bt-menu') syncBatch(true, true, true);
+    else if (t.name === 'bt-mode') syncBatch(false, false);
     else if (t.id === 'sh-date') syncShipAvail();
   });
   document.addEventListener('submit', function (e) {
